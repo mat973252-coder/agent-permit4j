@@ -64,6 +64,14 @@ The pipeline depends on the `RiskEvaluator` interface rather than SQL-specific c
 
 Path matching is a deterministic, filesystem-free lexical check. It treats slash and backslash as separators, compares path segments rather than string prefixes, and fails closed for relative paths, traversal, URI syntax, drive-letter paths, UNC paths, control characters, and ambiguous recursive flags. This avoids host-dependent behavior in policy tests. Symlinks, junctions, mount points, ACLs, and time-of-check/time-of-use protection require a filesystem-aware executor check in a later adapter; the lexical policy does not claim to resolve them.
 
+## Approval binding and expiry
+
+`agent-permit-approval` fingerprints the complete normalized `ToolInvocation`, including tool metadata, principal and resource attributes, action, tenant, environment, and arguments. The versioned SHA-256 canonical encoding uses explicit field names, UTF-8 byte lengths, and byte-sorted map keys; it does not rely on record, map, or JSON string rendering. Approval records expose only the lowercase digest rather than canonical argument bytes.
+
+`InMemoryApprovalService` creates expiring requests, records approval, and verifies a request ID against the normalized invocation supplied by the pipeline. A request is invalid when `now >= expiresAt`. Unknown, pending, expired, or fingerprint-mismatched requests fail closed with stable reason codes. Changing a deployment resource identifier (service) or its `version` argument therefore requires a new approval.
+
+For `HIGH` and `CRITICAL` risk, `DecisionPipeline.process(invocation, approvalRequestId)` executes only after a valid approval. Missing or invalid approval returns `APPROVAL_REQUIRED` with zero executions. The original `process(invocation)` behavior remains compatible and never implicitly grants approval. Approval consumption and retry deduplication are intentionally deferred to the idempotency slice.
+
 ## First implementation boundary
 
 The first vertical slice uses Java policies and in-memory stores. It proves semantics before adding Spring Boot convenience modules or distributed adapters.

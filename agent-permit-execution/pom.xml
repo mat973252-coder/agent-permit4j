@@ -17,6 +17,11 @@
     </dependency>
     <dependency>
       <groupId>io.github.mat973252</groupId>
+      <artifactId>agent-permit-approval</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.github.mat973252</groupId>
       <artifactId>agent-permit-audit</artifactId>
       <version>${project.version}</version>
     </dependency>
