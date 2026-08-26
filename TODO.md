@@ -10,7 +10,7 @@ The backlog is ordered by proof of value. Each item includes an observable accep
 
 ## P0 — trusted execution loop (v0.1)
 
-- [ ] Define `Principal`, `Action`, `Resource`, `InvocationContext`, `ToolDescriptor`, and `ToolInvocation` in `agent-permit-core`.
+- [x] Define `Principal`, `Action`, `Resource`, `InvocationContext`, `ToolDescriptor`, and `ToolInvocation` in `agent-permit-core`.
   - Verify: the same model represents file, SQL, messaging, HTTP, and deployment calls without business-specific types.
 - [ ] Define static tool metadata (`effect`, `reversibility`, `dataSensitivity`) and a dynamic `RiskEvaluator` SPI.
   - Verify: SQL fixtures classify `SELECT` as LOW, selective `UPDATE` as HIGH, unbounded `UPDATE` as CRITICAL, and `DROP`/`TRUNCATE` as DENY.
