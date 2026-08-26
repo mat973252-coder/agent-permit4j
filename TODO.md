@@ -16,7 +16,7 @@ The backlog is ordered by proof of value. Each item includes an observable accep
   - Verify: SQL fixtures classify `SELECT` as LOW, selective `UPDATE` as HIGH, unbounded `UPDATE` as CRITICAL, and `DROP`/`TRUNCATE` as DENY.
 - [x] Implement the deterministic decision pipeline: validate → normalize → authorize → assess risk → execute / request approval / deny.
   - Verify: every terminal path returns a structured reason and emits audit events.
-- [ ] Implement Java policy SPI and protected-resource policies.
+- [x] Implement Java policy SPI and protected-resource policies.
   - Verify: reading `README.md` is allowed and recursive deletion of `/workspace` is denied with `PROTECTED_PATH`.
 - [ ] Implement approval requests with expiry and normalized-argument fingerprint binding.
   - Verify: changing service or version after approval invalidates the approval and causes zero executions.

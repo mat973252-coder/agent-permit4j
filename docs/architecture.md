@@ -58,6 +58,12 @@ Every terminal result emits a minimal `DecisionAuditEvent` containing tool, prin
 
 The pipeline depends on the `RiskEvaluator` interface rather than SQL-specific code. A future HTTP evaluator or trusted evaluator registry can be injected without changing pipeline control flow. A registry is deferred until more than one evaluator exists so the first public API does not encode speculative routing semantics.
 
+## Protected file resources
+
+`ProtectedPathAuthorizer` implements the Java `Authorizer` SPI for the first protected-resource policy. It allows normal reads such as `/workspace/README.md`, but denies deletion of `/workspace` and recursive deletion of its descendants with `PROTECTED_PATH`. A file action paired with a non-file resource is denied to prevent type-disguise bypasses.
+
+Path matching is a deterministic, filesystem-free lexical check. It treats slash and backslash as separators, compares path segments rather than string prefixes, and fails closed for relative paths, traversal, URI syntax, drive-letter paths, UNC paths, control characters, and ambiguous recursive flags. This avoids host-dependent behavior in policy tests. Symlinks, junctions, mount points, ACLs, and time-of-check/time-of-use protection require a filesystem-aware executor check in a later adapter; the lexical policy does not claim to resolve them.
+
 ## First implementation boundary
 
 The first vertical slice uses Java policies and in-memory stores. It proves semantics before adding Spring Boot convenience modules or distributed adapters.
