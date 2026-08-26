@@ -6,7 +6,7 @@ The backlog is ordered by proof of value. Each item includes an observable accep
 
 - [x] Establish the six-module Maven structure and Java 21 baseline.
 - [x] Document the framework boundary and unified demo flow.
-- [ ] Make the GitHub Actions build green on the public repository.
+- [x] Make the GitHub Actions build green on the public repository.
 
 ## P0 — trusted execution loop (v0.1)
 
