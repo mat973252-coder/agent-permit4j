@@ -78,7 +78,15 @@ For `HIGH` and `CRITICAL` risk, `DecisionPipeline.process(invocation, approvalRe
 
 `InMemoryIdempotencyGuard` atomically binds the key to the normalized invocation fingerprint. Concurrent callers with the same key and fingerprint share one `CompletableFuture<DecisionResult>` and therefore one executor call. Both `EXECUTED` and `FAILED / EXECUTION_FAILED` results remain cached because an executor exception can leave the external side effect in an unknown state. Reusing a key with another fingerprint returns `DENIED / IDEMPOTENCY_INVOCATION_MISMATCH` without a new side effect.
 
-This guarantee is scoped to one guard instance in one process. Entries are not persisted or evicted, and the implementation does not claim cross-process exactly-once delivery. Each request still emits its own terminal decision audit event; append-only storage and replay-safe event views are the next P0 slice.
+This guarantee is scoped to one guard instance in one process. Entries are not persisted or evicted, and the implementation does not claim cross-process exactly-once delivery. Each request still emits its own terminal decision audit timeline as described below.
+
+## Append-only audit timeline
+
+`InMemoryAuditLog` is an `AuditSink` implementation that only appends and returns detached immutable snapshots. A pipeline run receives an opaque timeline ID and strictly increasing per-timeline sequence numbers. Events contain only tool, principal, tenant, stage, status, stable reason code, and the terminal `DecisionResult`; raw invocation arguments, canonical fingerprint bytes, exception messages, approval IDs, and idempotency keys are excluded.
+
+An approved high-risk path records `POLICY → RISK → APPROVAL → EXECUTION → RESULT`. A low-risk path records approval as `NOT_REQUIRED`; an early denial records only stages that actually occurred plus `RESULT`. The existing functional `AuditSink.record(DecisionAuditEvent)` contract remains compatible: legacy sinks receive the terminal result, while timeline-aware sinks override the stage-event method.
+
+`replaySafeView(timelineId)` filters and orders already-recorded events into an immutable `ReplaySafeAuditView`. It does not receive or invoke a pipeline, policy, approval service, idempotency guard, or executor, so viewing the timeline cannot repeat a side effect. The current log is process-local and non-persistent; JDBC storage, retention, signatures, and cross-process transport remain outside P0.
 
 ## First implementation boundary
 

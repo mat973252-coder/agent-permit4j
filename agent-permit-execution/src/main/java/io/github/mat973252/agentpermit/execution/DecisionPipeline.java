@@ -1,7 +1,7 @@
 package io.github.mat973252.agentpermit.execution;
 
 import io.github.mat973252.agentpermit.audit.AuditSink;
-import io.github.mat973252.agentpermit.audit.DecisionAuditEvent;
+import io.github.mat973252.agentpermit.audit.AuditStage;
 import io.github.mat973252.agentpermit.approval.ApprovalVerifier;
 import io.github.mat973252.agentpermit.core.DecisionOutcome;
 import io.github.mat973252.agentpermit.core.DecisionResult;
@@ -34,52 +34,71 @@ public final class DecisionPipeline {
     var validation =
         Objects.requireNonNull(dependencies.validator().validate(invocation), "validation");
     if (!validation.permitted()) {
-      return finish(invocation, DecisionOutcome.DENIED, validation.reasonCode());
+      var audit = InvocationAuditTrail.start(invocation, dependencies.auditSink());
+      audit.stage(AuditStage.POLICY, "DENIED", validation.reasonCode());
+      return finish(audit, DecisionOutcome.DENIED, validation.reasonCode());
     }
 
     var normalized =
         Objects.requireNonNull(dependencies.normalizer().normalize(invocation), "normalized");
+    var audit = InvocationAuditTrail.start(normalized, dependencies.auditSink());
     var authorization =
         Objects.requireNonNull(dependencies.authorizer().authorize(normalized), "authorization");
     if (!authorization.permitted()) {
-      return finish(normalized, DecisionOutcome.DENIED, authorization.reasonCode());
+      audit.stage(AuditStage.POLICY, "DENIED", authorization.reasonCode());
+      return finish(audit, DecisionOutcome.DENIED, authorization.reasonCode());
     }
+    audit.stage(AuditStage.POLICY, "ALLOWED", authorization.reasonCode());
 
     var risk = Objects.requireNonNull(dependencies.riskEvaluator().evaluate(normalized), "risk");
-    return decide(normalized, risk, approvalRequestId, idempotencyKey);
+    audit.stage(AuditStage.RISK, risk.level().name(), risk.reasonCode());
+    return decide(audit, normalized, risk, approvalRequestId, idempotencyKey);
   }
 
   private DecisionResult decide(
+      InvocationAuditTrail audit,
       ToolInvocation invocation,
       RiskAssessment risk,
       String approvalRequestId,
       String idempotencyKey) {
     return switch (risk.level()) {
-      case LOW -> execute(invocation, risk.reasonCode(), idempotencyKey);
+      case LOW -> {
+        audit.stage(AuditStage.APPROVAL, "NOT_REQUIRED", "APPROVAL_NOT_REQUIRED");
+        yield execute(audit, invocation, risk.reasonCode(), idempotencyKey);
+      }
       case HIGH, CRITICAL ->
-          requireApproval(invocation, risk, approvalRequestId, idempotencyKey);
-      case DENY -> finish(invocation, DecisionOutcome.DENIED, risk.reasonCode());
+          requireApproval(audit, invocation, risk, approvalRequestId, idempotencyKey);
+      case DENY -> finish(audit, DecisionOutcome.DENIED, risk.reasonCode());
     };
   }
 
   private DecisionResult requireApproval(
+      InvocationAuditTrail audit,
       ToolInvocation invocation,
       RiskAssessment risk,
       String approvalRequestId,
       String idempotencyKey) {
     if (approvalRequestId == null || approvalRequestId.isBlank()) {
-      return finish(invocation, DecisionOutcome.APPROVAL_REQUIRED, risk.reasonCode());
+      audit.stage(AuditStage.APPROVAL, "REQUIRED", risk.reasonCode());
+      return finish(audit, DecisionOutcome.APPROVAL_REQUIRED, risk.reasonCode());
     }
     var approval =
         Objects.requireNonNull(
             dependencies.approvalVerifier().verify(approvalRequestId, invocation), "approval");
+    audit.stage(
+        AuditStage.APPROVAL,
+        approval.permitted() ? "VERIFIED" : "REJECTED",
+        approval.reasonCode());
     return approval.permitted()
-        ? execute(invocation, risk.reasonCode(), idempotencyKey)
-        : finish(invocation, DecisionOutcome.APPROVAL_REQUIRED, approval.reasonCode());
+        ? execute(audit, invocation, risk.reasonCode(), idempotencyKey)
+        : finish(audit, DecisionOutcome.APPROVAL_REQUIRED, approval.reasonCode());
   }
 
   private DecisionResult execute(
-      ToolInvocation invocation, String reasonCode, String idempotencyKey) {
+      InvocationAuditTrail audit,
+      ToolInvocation invocation,
+      String reasonCode,
+      String idempotencyKey) {
     var decision =
         idempotencyKey == null
             ? invokeExecutor(invocation, reasonCode)
@@ -87,7 +106,8 @@ public final class DecisionPipeline {
                 .idempotencyGuard()
                 .executeOnce(
                     idempotencyKey, invocation, () -> invokeExecutor(invocation, reasonCode));
-    return finish(invocation, decision.outcome(), decision.reasonCode());
+    audit.stage(AuditStage.EXECUTION, decision.outcome().name(), decision.reasonCode());
+    return finish(audit, decision.outcome(), decision.reasonCode());
   }
 
   private DecisionResult invokeExecutor(ToolInvocation invocation, String reasonCode) {
@@ -100,16 +120,9 @@ public final class DecisionPipeline {
   }
 
   private DecisionResult finish(
-      ToolInvocation invocation, DecisionOutcome outcome, String reasonCode) {
+      InvocationAuditTrail audit, DecisionOutcome outcome, String reasonCode) {
     var decision = new DecisionResult(outcome, reasonCode);
-    dependencies
-        .auditSink()
-        .record(
-            new DecisionAuditEvent(
-                invocation.descriptor().name(),
-                invocation.principal().id(),
-                invocation.context().tenantId(),
-                decision));
+    audit.result(decision);
     return decision;
   }
 
