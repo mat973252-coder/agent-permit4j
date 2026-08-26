@@ -8,7 +8,7 @@ AgentPermit4j sits between an AI model and external systems. It enforces authori
 
 ## Project status
 
-This repository is at the **bootstrap stage**. The module boundaries, delivery backlog, and demo contract are ready; the public API is intentionally not implemented yet.
+The **v0.1 trusted execution loop** is implemented: generic invocation modeling, Java policies, dynamic SQL risk, approval fingerprinting and expiry, in-memory idempotency, append-only audit timelines, and a local Playground. P1 Spring and distributed adapters remain future work.
 
 ## Why this project
 
@@ -29,9 +29,25 @@ The first release targets Spring AI and local, reproducible demo adapters. OPA, 
 
 ## Demo story
 
-The Playground will demonstrate a Developer Workspace Agent that can read files, inspect SQL, send messages, call HTTP APIs, and simulate deployments. Read-only operations can run automatically; production writes require approval; destructive or protected-resource operations are denied.
+The Playground demonstrates a Developer Workspace Agent with file read/delete, SQL read/write, and staging/production deployment scenarios. Read-only operations run automatically; production or selective writes require exact approval; protected-resource deletion is denied.
 
 See [docs/demo-website.md](docs/demo-website.md) for the website flow and [TODO.md](TODO.md) for the executable roadmap.
+
+## Run the Playground
+
+The command builds all required modules, runs the tests, and executes every scenario with in-memory mock side effects. It does not contact a filesystem, database, deployment system, or approval provider.
+
+```bash
+./mvnw -q -pl agent-permit-playground -am verify
+```
+
+On Windows:
+
+```powershell
+.\mvnw.cmd -q -pl agent-permit-playground -am verify
+```
+
+Each case prints its structured outcome, stable reason code, observed mock side-effect count, and audit stages. The process exits with code `0` after all scenarios complete.
 
 ## Build
 

@@ -5,8 +5,35 @@
   <artifactId>agent-permit-playground</artifactId>
   <name>AgentPermit4j :: Playground</name>
   <dependencies>
+    <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-core</artifactId><version>${project.version}</version></dependency>
+    <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-policy</artifactId><version>${project.version}</version></dependency>
     <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-execution</artifactId><version>${project.version}</version></dependency>
     <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-approval</artifactId><version>${project.version}</version></dependency>
     <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-audit</artifactId><version>${project.version}</version></dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.5.1</version>
+        <executions>
+          <execution>
+            <id>run-playground</id>
+            <phase>verify</phase>
+            <goals><goal>java</goal></goals>
+            <configuration>
+              <mainClass>io.github.mat973252.agentpermit.playground.PlaygroundApplication</mainClass>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 </project>

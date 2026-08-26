@@ -88,6 +88,12 @@ An approved high-risk path records `POLICY → RISK → APPROVAL → EXECUTION �
 
 `replaySafeView(timelineId)` filters and orders already-recorded events into an immutable `ReplaySafeAuditView`. It does not receive or invoke a pipeline, policy, approval service, idempotency guard, or executor, so viewing the timeline cannot repeat a side effect. The current log is process-local and non-persistent; JDBC storage, retention, signatures, and cross-process transport remain outside P0.
 
+## Reproducible Playground
+
+`agent-permit-playground` assembles the real P0 pipeline against in-memory counters and logs. Its file cases read `/workspace/README.md` and deny recursive deletion of `/workspace`; its SQL cases execute a `SELECT`, pause a selective `UPDATE`, then execute the exact approved update; its deployment cases execute staging, pause production, then execute the exact approved production invocation.
+
+The Maven `verify` phase runs the CLI after tests. The printed side-effect count comes from the injected mock `ToolExecutor`, while decisions, reasons, approval checks, idempotency, and timeline stages come from the production modules. No output is precomputed and no external system is contacted.
+
 ## First implementation boundary
 
 The first vertical slice uses Java policies and in-memory stores. It proves semantics before adding Spring Boot convenience modules or distributed adapters.

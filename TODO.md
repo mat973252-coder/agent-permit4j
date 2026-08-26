@@ -24,7 +24,7 @@ The backlog is ordered by proof of value. Each item includes an observable accep
   - Verify: concurrent invocations with one idempotency key produce exactly one mock side effect.
 - [x] Implement append-only in-memory audit and a replay-safe event view.
   - Verify: a complete timeline shows policy, risk, approval, execution, and result events without re-running side effects.
-- [ ] Ship three reproducible Playground scenarios: file read/delete, SQL read/write, staging/production deployment.
+- [x] Ship three reproducible Playground scenarios: file read/delete, SQL read/write, staging/production deployment.
   - Verify: one command starts the demo and all scenarios run without real external systems.
 
 ## P1 — usable Spring integration (v0.2)
