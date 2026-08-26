@@ -21,10 +21,15 @@ public final class DecisionPipeline {
   }
 
   public DecisionResult process(ToolInvocation invocation) {
-    return process(invocation, null);
+    return process(invocation, null, null);
   }
 
   public DecisionResult process(ToolInvocation invocation, String approvalRequestId) {
+    return process(invocation, approvalRequestId, null);
+  }
+
+  public DecisionResult process(
+      ToolInvocation invocation, String approvalRequestId, String idempotencyKey) {
     Objects.requireNonNull(invocation, "invocation");
     var validation =
         Objects.requireNonNull(dependencies.validator().validate(invocation), "validation");
@@ -41,20 +46,27 @@ public final class DecisionPipeline {
     }
 
     var risk = Objects.requireNonNull(dependencies.riskEvaluator().evaluate(normalized), "risk");
-    return decide(normalized, risk, approvalRequestId);
+    return decide(normalized, risk, approvalRequestId, idempotencyKey);
   }
 
   private DecisionResult decide(
-      ToolInvocation invocation, RiskAssessment risk, String approvalRequestId) {
+      ToolInvocation invocation,
+      RiskAssessment risk,
+      String approvalRequestId,
+      String idempotencyKey) {
     return switch (risk.level()) {
-      case LOW -> execute(invocation, risk.reasonCode());
-      case HIGH, CRITICAL -> requireApproval(invocation, risk, approvalRequestId);
+      case LOW -> execute(invocation, risk.reasonCode(), idempotencyKey);
+      case HIGH, CRITICAL ->
+          requireApproval(invocation, risk, approvalRequestId, idempotencyKey);
       case DENY -> finish(invocation, DecisionOutcome.DENIED, risk.reasonCode());
     };
   }
 
   private DecisionResult requireApproval(
-      ToolInvocation invocation, RiskAssessment risk, String approvalRequestId) {
+      ToolInvocation invocation,
+      RiskAssessment risk,
+      String approvalRequestId,
+      String idempotencyKey) {
     if (approvalRequestId == null || approvalRequestId.isBlank()) {
       return finish(invocation, DecisionOutcome.APPROVAL_REQUIRED, risk.reasonCode());
     }
@@ -62,17 +74,29 @@ public final class DecisionPipeline {
         Objects.requireNonNull(
             dependencies.approvalVerifier().verify(approvalRequestId, invocation), "approval");
     return approval.permitted()
-        ? execute(invocation, risk.reasonCode())
+        ? execute(invocation, risk.reasonCode(), idempotencyKey)
         : finish(invocation, DecisionOutcome.APPROVAL_REQUIRED, approval.reasonCode());
   }
 
-  private DecisionResult execute(ToolInvocation invocation, String reasonCode) {
+  private DecisionResult execute(
+      ToolInvocation invocation, String reasonCode, String idempotencyKey) {
+    var decision =
+        idempotencyKey == null
+            ? invokeExecutor(invocation, reasonCode)
+            : dependencies
+                .idempotencyGuard()
+                .executeOnce(
+                    idempotencyKey, invocation, () -> invokeExecutor(invocation, reasonCode));
+    return finish(invocation, decision.outcome(), decision.reasonCode());
+  }
+
+  private DecisionResult invokeExecutor(ToolInvocation invocation, String reasonCode) {
     try {
       dependencies.executor().execute(invocation);
     } catch (RuntimeException exception) {
-      return finish(invocation, DecisionOutcome.FAILED, "EXECUTION_FAILED");
+      return new DecisionResult(DecisionOutcome.FAILED, "EXECUTION_FAILED");
     }
-    return finish(invocation, DecisionOutcome.EXECUTED, reasonCode);
+    return new DecisionResult(DecisionOutcome.EXECUTED, reasonCode);
   }
 
   private DecisionResult finish(
@@ -95,8 +119,28 @@ public final class DecisionPipeline {
       Authorizer authorizer,
       RiskEvaluator riskEvaluator,
       ApprovalVerifier approvalVerifier,
+      IdempotencyGuard idempotencyGuard,
       ToolExecutor executor,
       AuditSink auditSink) {
+
+    public Dependencies(
+        InvocationValidator validator,
+        InvocationNormalizer normalizer,
+        Authorizer authorizer,
+        RiskEvaluator riskEvaluator,
+        ApprovalVerifier approvalVerifier,
+        ToolExecutor executor,
+        AuditSink auditSink) {
+      this(
+          validator,
+          normalizer,
+          authorizer,
+          riskEvaluator,
+          approvalVerifier,
+          new InMemoryIdempotencyGuard(),
+          executor,
+          auditSink);
+    }
 
     public Dependencies(
         InvocationValidator validator,
@@ -111,6 +155,7 @@ public final class DecisionPipeline {
           authorizer,
           riskEvaluator,
           (requestId, invocation) -> new GateDecision(false, "APPROVAL_REQUIRED"),
+          new InMemoryIdempotencyGuard(),
           executor,
           auditSink);
     }
@@ -121,6 +166,7 @@ public final class DecisionPipeline {
       authorizer = Objects.requireNonNull(authorizer, "authorizer");
       riskEvaluator = Objects.requireNonNull(riskEvaluator, "riskEvaluator");
       approvalVerifier = Objects.requireNonNull(approvalVerifier, "approvalVerifier");
+      idempotencyGuard = Objects.requireNonNull(idempotencyGuard, "idempotencyGuard");
       executor = Objects.requireNonNull(executor, "executor");
       auditSink = Objects.requireNonNull(auditSink, "auditSink");
     }

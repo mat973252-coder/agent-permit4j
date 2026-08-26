@@ -20,7 +20,7 @@ The backlog is ordered by proof of value. Each item includes an observable accep
   - Verify: reading `README.md` is allowed and recursive deletion of `/workspace` is denied with `PROTECTED_PATH`.
 - [x] Implement approval requests with expiry and normalized-argument fingerprint binding.
   - Verify: changing service or version after approval invalidates the approval and causes zero executions.
-- [ ] Implement in-memory idempotency for the first vertical slice.
+- [x] Implement in-memory idempotency for the first vertical slice.
   - Verify: concurrent invocations with one idempotency key produce exactly one mock side effect.
 - [ ] Implement append-only in-memory audit and a replay-safe event view.
   - Verify: a complete timeline shows policy, risk, approval, execution, and result events without re-running side effects.

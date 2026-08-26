@@ -70,7 +70,15 @@ Path matching is a deterministic, filesystem-free lexical check. It treats slash
 
 `InMemoryApprovalService` creates expiring requests, records approval, and verifies a request ID against the normalized invocation supplied by the pipeline. A request is invalid when `now >= expiresAt`. Unknown, pending, expired, or fingerprint-mismatched requests fail closed with stable reason codes. Changing a deployment resource identifier (service) or its `version` argument therefore requires a new approval.
 
-For `HIGH` and `CRITICAL` risk, `DecisionPipeline.process(invocation, approvalRequestId)` executes only after a valid approval. Missing or invalid approval returns `APPROVAL_REQUIRED` with zero executions. The original `process(invocation)` behavior remains compatible and never implicitly grants approval. Approval consumption and retry deduplication are intentionally deferred to the idempotency slice.
+For `HIGH` and `CRITICAL` risk, `DecisionPipeline.process(invocation, approvalRequestId)` executes only after a valid approval. Missing or invalid approval returns `APPROVAL_REQUIRED` with zero executions. The original `process(invocation)` behavior remains compatible and never implicitly grants approval. Approval consumption is not yet implemented; retry deduplication is defined below.
+
+## In-memory idempotency
+
+`DecisionPipeline.process(invocation, approvalRequestId, idempotencyKey)` applies idempotency after normalization, authorization, and any required approval, immediately before the executor. The key is transport metadata and is deliberately excluded from `ToolInvocation` and approval fingerprints. Existing overloads remain compatible and execute without idempotency; callers that require retry protection must provide a stable non-blank key.
+
+`InMemoryIdempotencyGuard` atomically binds the key to the normalized invocation fingerprint. Concurrent callers with the same key and fingerprint share one `CompletableFuture<DecisionResult>` and therefore one executor call. Both `EXECUTED` and `FAILED / EXECUTION_FAILED` results remain cached because an executor exception can leave the external side effect in an unknown state. Reusing a key with another fingerprint returns `DENIED / IDEMPOTENCY_INVOCATION_MISMATCH` without a new side effect.
+
+This guarantee is scoped to one guard instance in one process. Entries are not persisted or evicted, and the implementation does not claim cross-process exactly-once delivery. Each request still emits its own terminal decision audit event; append-only storage and replay-safe event views are the next P0 slice.
 
 ## First implementation boundary
 
