@@ -31,7 +31,15 @@ class ToolInvocationTest {
         () ->
             assertThrows(
                 IllegalArgumentException.class, () -> new InvocationContext("tenant-a", " ")),
-        () -> assertThrows(IllegalArgumentException.class, () -> new ToolDescriptor(" ")));
+        () ->
+            assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                    new ToolDescriptor(
+                        " ",
+                        ToolEffect.WRITE,
+                        Reversibility.REVERSIBLE,
+                        DataSensitivity.INTERNAL)));
   }
 
   @Test
@@ -65,7 +73,7 @@ class ToolInvocationTest {
     var invocationArguments = mutableInput();
     var invocation =
         new ToolInvocation(
-            new ToolDescriptor("workspace.read-file"),
+            descriptor("workspace.read-file"),
             new Principal("agent-1", principalAttributes),
             new Action("file.read"),
             new Resource("file", "/workspace/README.md", resourceAttributes),
@@ -107,7 +115,7 @@ class ToolInvocationTest {
       Map<String, String> arguments) {
     var invocation =
         new ToolInvocation(
-            new ToolDescriptor(actionName),
+            descriptor(actionName),
             new Principal("agent-1", Map.of("role", "developer")),
             new Action(actionName),
             new Resource(resourceType, resourceIdentifier, Map.of()),
@@ -120,5 +128,10 @@ class ToolInvocationTest {
     var attributes = new LinkedHashMap<String, String>();
     attributes.put("original", "value");
     return attributes;
+  }
+
+  private static ToolDescriptor descriptor(String name) {
+    return new ToolDescriptor(
+        name, ToolEffect.WRITE, Reversibility.REVERSIBLE, DataSensitivity.CONFIDENTIAL);
   }
 }

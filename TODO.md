@@ -12,7 +12,7 @@ The backlog is ordered by proof of value. Each item includes an observable accep
 
 - [x] Define `Principal`, `Action`, `Resource`, `InvocationContext`, `ToolDescriptor`, and `ToolInvocation` in `agent-permit-core`.
   - Verify: the same model represents file, SQL, messaging, HTTP, and deployment calls without business-specific types.
-- [ ] Define static tool metadata (`effect`, `reversibility`, `dataSensitivity`) and a dynamic `RiskEvaluator` SPI.
+- [x] Define static tool metadata (`effect`, `reversibility`, `dataSensitivity`) and a dynamic `RiskEvaluator` SPI.
   - Verify: SQL fixtures classify `SELECT` as LOW, selective `UPDATE` as HIGH, unbounded `UPDATE` as CRITICAL, and `DROP`/`TRUNCATE` as DENY.
 - [ ] Implement the deterministic decision pipeline: validate → normalize → authorize → assess risk → execute / request approval / deny.
   - Verify: every terminal path returns a structured reason and emits audit events.
