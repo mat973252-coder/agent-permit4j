@@ -39,6 +39,8 @@ The bootstrap domain model lives in `agent-permit-core` and uses the following i
 - `ToolDescriptor(name, effect, reversibility, dataSensitivity)` identifies the tool contract and its static risk metadata.
 - `ToolInvocation` combines the descriptor, principal, action, resource, context, and scalar arguments.
 - `RiskAssessment(level, reasonCode)` carries the dynamic risk result with a stable machine-readable reason.
+- `GateDecision(permitted, reasonCode)` represents validation and authorization gates.
+- `DecisionResult(outcome, reasonCode)` represents an executed, approval-required, denied, or failed terminal outcome.
 
 Attribute and argument maps are copied on construction and exposed as immutable maps so authorization and risk inputs cannot change during a decision.
 
@@ -47,6 +49,14 @@ Attribute and argument maps are copied on construction and exposed as immutable 
 `agent-permit-policy` defines the `RiskEvaluator` SPI. The first evaluator parses SQL into an AST and classifies read-only, selective update, unbounded update, and destructive statements. Missing input, parse failures, multiple statements, non-SQL resources, and unsupported statement types fail closed with `DENY`.
 
 An update with a predicate is classified as `HIGH`, while a missing predicate or literal tautology such as `1 = 1` is `CRITICAL`. `HIGH` means that a syntactic predicate exists; it does not prove a small affected-row count or semantic safety. Later pipeline stages must still apply policy and approval rules.
+
+## Deterministic decision pipeline
+
+`agent-permit-execution` owns the fixed orchestration order: validate, normalize, authorize, assess risk, then select one terminal path. Validation and authorization failures stop immediately. `LOW` risk executes once, `HIGH` and `CRITICAL` return `APPROVAL_REQUIRED` without execution, and `DENY` remains denied. An executor exception is converted to the generic `EXECUTION_FAILED` reason so implementation details and secrets are not exposed.
+
+Every terminal result emits a minimal `DecisionAuditEvent` containing tool, principal, tenant, outcome, and stable reason code. Raw invocation arguments are excluded. The append-only event timeline, approval persistence and fingerprint binding, and idempotent side-effect protection remain separate P0 slices.
+
+The pipeline depends on the `RiskEvaluator` interface rather than SQL-specific code. A future HTTP evaluator or trusted evaluator registry can be injected without changing pipeline control flow. A registry is deferred until more than one evaluator exists so the first public API does not encode speculative routing semantics.
 
 ## First implementation boundary
 

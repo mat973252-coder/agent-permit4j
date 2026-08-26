@@ -14,7 +14,7 @@ The backlog is ordered by proof of value. Each item includes an observable accep
   - Verify: the same model represents file, SQL, messaging, HTTP, and deployment calls without business-specific types.
 - [x] Define static tool metadata (`effect`, `reversibility`, `dataSensitivity`) and a dynamic `RiskEvaluator` SPI.
   - Verify: SQL fixtures classify `SELECT` as LOW, selective `UPDATE` as HIGH, unbounded `UPDATE` as CRITICAL, and `DROP`/`TRUNCATE` as DENY.
-- [ ] Implement the deterministic decision pipeline: validate → normalize → authorize → assess risk → execute / request approval / deny.
+- [x] Implement the deterministic decision pipeline: validate → normalize → authorize → assess risk → execute / request approval / deny.
   - Verify: every terminal path returns a structured reason and emits audit events.
 - [ ] Implement Java policy SPI and protected-resource policies.
   - Verify: reading `README.md` is allowed and recursive deletion of `/workspace` is denied with `PROTECTED_PATH`.

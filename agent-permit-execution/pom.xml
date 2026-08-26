@@ -5,7 +5,26 @@
   <artifactId>agent-permit-execution</artifactId>
   <name>AgentPermit4j :: Execution</name>
   <dependencies>
-    <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-core</artifactId><version>${project.version}</version></dependency>
-    <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-policy</artifactId><version>${project.version}</version></dependency>
+    <dependency>
+      <groupId>io.github.mat973252</groupId>
+      <artifactId>agent-permit-core</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.github.mat973252</groupId>
+      <artifactId>agent-permit-policy</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.github.mat973252</groupId>
+      <artifactId>agent-permit-audit</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 </project>
