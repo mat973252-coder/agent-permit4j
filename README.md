@@ -1,5 +1,7 @@
 # AgentPermit4j
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 **A trusted action execution layer for Java agents.**
 
 AgentPermit4j sits between an AI model and external systems. It enforces authorization, dynamic risk assessment, approval, idempotency, and audit policies for every tool invocation.
