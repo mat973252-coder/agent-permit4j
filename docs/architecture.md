@@ -46,17 +46,23 @@ Attribute and argument maps are copied on construction and exposed as immutable 
 
 ## Dynamic risk evaluation
 
-`agent-permit-policy` defines the `RiskEvaluator` SPI. The first evaluator parses SQL into an AST and classifies read-only, selective update, unbounded update, and destructive statements. Missing input, parse failures, multiple statements, non-SQL resources, and unsupported statement types fail closed with `DENY`.
+`agent-permit-policy` defines the `RiskEvaluator` SPI. The SQL evaluator parses statements into an AST and classifies read-only, selective update, unbounded update, and destructive statements. Missing input, parse failures, multiple statements, non-SQL resources, and unsupported statement types fail closed with `DENY`.
 
 An update with a predicate is classified as `HIGH`, while a missing predicate or literal tautology such as `1 = 1` is `CRITICAL`. `HIGH` means that a syntactic predicate exists; it does not prove a small affected-row count or semantic safety. Later pipeline stages must still apply policy and approval rules.
+
+`RiskEvaluatorRegistry` snapshots a runtime-provided map from the exact resource type in the normalized invocation to an evaluator. It delegates without changing successful assessments and denies unregistered resource types with `RISK_EVALUATOR_UNAVAILABLE`. A registered evaluator that returns no assessment or throws a runtime exception fails closed with `RISK_EVALUATION_FAILED`; exception details are not exposed. This keeps routing explicit and lets Spring or another configuration layer build the map without adding framework types to the policy API.
+
+`HttpRiskEvaluator` evaluates an HTTP invocation whose resource identifier is the target URI and whose scalar arguments contain `method` and optional `payload`. `HttpRiskPolicy` is an immutable runtime configuration snapshot containing exact allowed HTTPS hosts and a maximum UTF-8 payload size. GET/HEAD are `LOW`, POST/PUT/PATCH are `HIGH`, and DELETE is `CRITICAL`; unsupported methods, read payloads, oversized payloads, malformed targets, non-default ports, non-HTTPS targets, unlisted hosts, localhost, and IP literals are denied with stable reason codes.
+
+The HTTP evaluator is deterministic and does not perform DNS resolution. Exact host allowlisting reduces the target surface, but a real HTTP executor must still resolve the host and reject private, loopback, link-local, and other forbidden addresses immediately before connecting to protect against DNS rebinding and time-of-check/time-of-use changes.
 
 ## Deterministic decision pipeline
 
 `agent-permit-execution` owns the fixed orchestration order: validate, normalize, authorize, assess risk, then select one terminal path. Validation and authorization failures stop immediately. `LOW` risk executes once, `HIGH` and `CRITICAL` return `APPROVAL_REQUIRED` without execution, and `DENY` remains denied. An executor exception is converted to the generic `EXECUTION_FAILED` reason so implementation details and secrets are not exposed.
 
-Every terminal result emits a minimal `DecisionAuditEvent` containing tool, principal, tenant, outcome, and stable reason code. Raw invocation arguments are excluded. The append-only event timeline, approval persistence and fingerprint binding, and idempotent side-effect protection remain separate P0 slices.
+Every terminal result emits a minimal `DecisionAuditEvent` containing tool, principal, tenant, outcome, and stable reason code. Raw invocation arguments are excluded. Append-only timelines, approval fingerprint binding, and idempotent side-effect protection are supplied through separate components rather than embedded in orchestration.
 
-The pipeline depends on the `RiskEvaluator` interface rather than SQL-specific code. A future HTTP evaluator or trusted evaluator registry can be injected without changing pipeline control flow. A registry is deferred until more than one evaluator exists so the first public API does not encode speculative routing semantics.
+The pipeline depends on the `RiskEvaluator` interface rather than tool-specific code. SQL and HTTP evaluators are selected through `RiskEvaluatorRegistry` without changing pipeline control flow.
 
 ## Protected file resources
 
