@@ -14,6 +14,7 @@ import io.github.mat973252.agentpermit.core.ToolInvocation;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.HashMap;
 import java.util.Map;
 
 final class PlaygroundFixtures {
@@ -57,6 +58,24 @@ final class PlaygroundFixtures {
         new Resource("deployment", "service://checkout", Map.of()),
         environment,
         Map.of("version", "1.2.3"));
+  }
+
+  static ToolInvocation http(String method, String uri, String payload) {
+    var arguments = new HashMap<String, String>();
+    arguments.put("method", method);
+    if (!payload.isEmpty()) {
+      arguments.put("payload", payload);
+    }
+    return invocation(
+        new ToolDescriptor(
+            "http.request",
+            ToolEffect.EXECUTE,
+            Reversibility.COMPENSATABLE,
+            DataSensitivity.INTERNAL),
+        new Action("http.request"),
+        new Resource("http", uri, Map.of()),
+        "local",
+        arguments);
   }
 
   static InMemoryApprovalService approvals(String requestId) {

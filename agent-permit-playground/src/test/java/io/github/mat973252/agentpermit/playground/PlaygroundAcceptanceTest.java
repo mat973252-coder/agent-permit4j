@@ -15,11 +15,11 @@ import org.junit.jupiter.api.Test;
 class PlaygroundAcceptanceTest {
 
   @Test
-  void runsThreeRealPipelineScenariosWithExpectedSideEffects() {
+  void runsFourRealPipelineScenariosWithExpectedSideEffects() {
     var reports = new PlaygroundRunner().run();
 
     assertAll(
-        () -> assertEquals(List.of("file", "sql", "deployment"), names(reports)),
+        () -> assertEquals(List.of("file", "sql", "http", "deployment"), names(reports)),
         () ->
             assertCase(
                 reports,
@@ -51,6 +51,30 @@ class PlaygroundAcceptanceTest {
                 "sql",
                 new ExpectedCase(
                     "write-approved", DecisionOutcome.EXECUTED, "SQL_SELECTIVE_UPDATE", 1)),
+        () ->
+            assertCase(
+                reports,
+                "http",
+                new ExpectedCase("read", DecisionOutcome.EXECUTED, "HTTP_READ_ONLY", 1)),
+        () ->
+            assertCase(
+                reports,
+                "http",
+                new ExpectedCase(
+                    "write-awaiting-approval",
+                    DecisionOutcome.APPROVAL_REQUIRED,
+                    "HTTP_WRITE",
+                    0)),
+        () ->
+            assertCase(
+                reports,
+                "http",
+                new ExpectedCase("write-approved", DecisionOutcome.EXECUTED, "HTTP_WRITE", 1)),
+        () ->
+            assertCase(
+                reports,
+                "http",
+                new ExpectedCase("ssrf", DecisionOutcome.DENIED, "HTTP_SSRF_TARGET", 0)),
         () ->
             assertCase(
                 reports,
@@ -89,6 +113,7 @@ class PlaygroundAcceptanceTest {
         () -> assertEquals(0, exitCode),
         () -> assertTrue(text.contains("SCENARIO file")),
         () -> assertTrue(text.contains("SCENARIO sql")),
+        () -> assertTrue(text.contains("SCENARIO http")),
         () -> assertTrue(text.contains("SCENARIO deployment")),
         () -> assertTrue(text.contains("outcome=APPROVAL_REQUIRED")),
         () -> assertTrue(text.contains("timeline=POLICY>RISK>APPROVAL>EXECUTION>RESULT")));
@@ -110,12 +135,17 @@ class PlaygroundAcceptanceTest {
         () -> assertEquals(expected.outcome(), result.decision().outcome()),
         () -> assertEquals(expected.reasonCode(), result.decision().reasonCode()),
         () -> assertEquals(expected.sideEffects(), result.sideEffectCount()),
-        () -> assertTimeline(expected.outcome(), result.timeline()));
+        () -> assertTimeline(expected.outcome(), expected.reasonCode(), result.timeline()));
   }
 
-  private static void assertTimeline(DecisionOutcome outcome, List<AuditStage> timeline) {
+  private static void assertTimeline(
+      DecisionOutcome outcome, String reasonCode, List<AuditStage> timeline) {
     if (outcome == DecisionOutcome.DENIED) {
-      assertEquals(List.of(AuditStage.POLICY, AuditStage.RESULT), timeline);
+      var expected =
+          "HTTP_SSRF_TARGET".equals(reasonCode)
+              ? List.of(AuditStage.POLICY, AuditStage.RISK, AuditStage.RESULT)
+              : List.of(AuditStage.POLICY, AuditStage.RESULT);
+      assertEquals(expected, timeline);
       return;
     }
     if (outcome == DecisionOutcome.APPROVAL_REQUIRED) {

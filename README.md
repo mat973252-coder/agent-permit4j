@@ -10,7 +10,7 @@ AgentPermit4j sits between an AI model and external systems. It enforces authori
 
 ## Project status
 
-The **v0.1 trusted execution loop** is implemented: generic invocation modeling, Java policies, dynamic SQL risk, approval fingerprinting and expiry, in-memory idempotency, append-only audit timelines, and a local Playground. P1 Spring and distributed adapters remain future work.
+The **v0.1 trusted execution loop** is implemented: generic invocation modeling, Java policies, dynamic SQL risk, approval fingerprinting and expiry, in-memory idempotency, append-only audit timelines, and a local Playground. The first v0.2 slice adds runtime evaluator routing and configurable HTTP risk policies; Spring and distributed adapters remain future work.
 
 ## Why this project
 
@@ -31,9 +31,25 @@ The first release targets Spring AI and local, reproducible demo adapters. OPA, 
 
 ## Demo story
 
-The Playground demonstrates a Developer Workspace Agent with file read/delete, SQL read/write, and staging/production deployment scenarios. Read-only operations run automatically; production or selective writes require exact approval; protected-resource deletion is denied.
+The Playground demonstrates a Developer Workspace Agent with file read/delete, SQL read/write, outbound HTTP, and staging/production deployment scenarios. Read-only operations run automatically; production or selective writes require exact approval; protected-resource deletion and SSRF targets are denied.
 
 See [docs/demo-website.md](docs/demo-website.md) for the website flow and [TODO.md](TODO.md) for the executable roadmap.
+
+## Configure HTTP risk
+
+Applications provide evaluator and HTTP policy configuration at runtime:
+
+```java
+var riskEvaluator =
+    new RiskEvaluatorRegistry(
+        Map.of(
+            "sql", new SqlRiskEvaluator(),
+            "http",
+                new HttpRiskEvaluator(
+                    new HttpRiskPolicy(Set.of("api.example.com"), 16 * 1024))));
+```
+
+The registry and policy take immutable snapshots. A configuration system can build and atomically replace a new snapshot when configuration changes; AgentPermit4j does not watch YAML, environment variables, or a remote configuration service inside the reusable policy module.
 
 ## Run the Playground
 

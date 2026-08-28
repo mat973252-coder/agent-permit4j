@@ -2,9 +2,11 @@ package io.github.mat973252.agentpermit.playground;
 
 import io.github.mat973252.agentpermit.approval.ApprovalVerifier;
 import io.github.mat973252.agentpermit.core.GateDecision;
+import io.github.mat973252.agentpermit.policy.RiskEvaluatorRegistry;
 import io.github.mat973252.agentpermit.policy.sql.SqlRiskEvaluator;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 
 final class SqlScenario {
 
@@ -26,7 +28,7 @@ final class SqlScenario {
   private static ScenarioHarness harness(ApprovalVerifier approvals) {
     return new ScenarioHarness(
         invocation -> new GateDecision(true, "SQL_AUTHORIZED"),
-        new SqlRiskEvaluator(),
+        new RiskEvaluatorRegistry(Map.of("sql", new SqlRiskEvaluator())),
         approvals);
   }
 

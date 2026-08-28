@@ -5,6 +5,10 @@ import java.util.List;
 public final class PlaygroundRunner {
 
   public List<ScenarioReport> run() {
-    return List.of(new FileScenario().run(), new SqlScenario().run(), new DeploymentScenario().run());
+    return List.of(
+        new FileScenario().run(),
+        new SqlScenario().run(),
+        new HttpScenario().run(),
+        new DeploymentScenario().run());
   }
 }

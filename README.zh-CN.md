@@ -8,7 +8,7 @@ AgentPermit4j 位于 AI 模型与外部系统之间，为每次工具调用强�
 
 ## 项目状态
 
-**v0.1 可信执行闭环**已经实现，包括：通用调用模型、Java 策略、动态 SQL 风险评估、审批指纹与过期控制、内存幂等、只追加审计时间线，以及本地 Playground。Spring 集成与分布式适配器属于后续 P1 范围。
+**v0.1 可信执行闭环**已经实现，包括：通用调用模型、Java 策略、动态 SQL 风险评估、审批指纹与过期控制、内存幂等、只追加审计时间线，以及本地 Playground。首个 v0.2 切片进一步加入运行时 evaluator 路由和可配置 HTTP 风险策略；Spring 集成与分布式适配器仍属于后续范围。
 
 ## 为什么需要这个项目
 
@@ -29,15 +29,32 @@ agent-permit-playground   Developer Workspace Agent 演示
 
 ## 演示场景
 
-Playground 模拟一个 Developer Workspace Agent，包含文件读取／删除、SQL 读取／写入，以及 staging／production 部署场景：
+Playground 模拟一个 Developer Workspace Agent，包含文件读取／删除、SQL 读取／写入、外部 HTTP/API 调用，以及 staging／production 部署场景：
 
 - 只读操作自动执行；
 - production 部署和选择性写入必须获得与当前调用精确绑定的审批；
 - 删除受保护资源会被拒绝；
+- 非允许域名、SSRF 目标和不安全 HTTP 请求会被拒绝；
 - 同一幂等键的并发调用只产生一次 mock 副作用；
 - 每次调用都会生成可安全回放的审计时间线。
 
 网站流程参见 [docs/demo-website.md](docs/demo-website.md)，可执行路线图参见 [TODO.md](TODO.md)。
+
+## 配置 HTTP 风险策略
+
+应用可以在运行时提供 evaluator 和 HTTP 策略配置：
+
+```java
+var riskEvaluator =
+    new RiskEvaluatorRegistry(
+        Map.of(
+            "sql", new SqlRiskEvaluator(),
+            "http",
+                new HttpRiskEvaluator(
+                    new HttpRiskPolicy(Set.of("api.example.com"), 16 * 1024))));
+```
+
+注册表和策略都会保存不可变快照。配置发生变化时，应用层可以构造并原子替换新快照；可复用 policy 模块本身不会监听 YAML、环境变量或远程配置中心。
 
 ## 运行 Playground
 
