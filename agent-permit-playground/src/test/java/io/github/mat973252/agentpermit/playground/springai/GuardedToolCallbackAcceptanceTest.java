@@ -12,8 +12,8 @@ import io.github.mat973252.agentpermit.core.GateDecision;
 import io.github.mat973252.agentpermit.core.Reversibility;
 import io.github.mat973252.agentpermit.core.ToolDescriptor;
 import io.github.mat973252.agentpermit.core.ToolEffect;
-import io.github.mat973252.agentpermit.execution.DecisionPipeline;
-import io.github.mat973252.agentpermit.execution.InMemoryIdempotencyGuard;
+import io.github.mat973252.agentpermit.execution.InMemoryResultIdempotencyGuard;
+import io.github.mat973252.agentpermit.execution.ResultDecisionPipeline;
 import io.github.mat973252.agentpermit.policy.Authorizer;
 import io.github.mat973252.agentpermit.policy.http.HttpRiskEvaluator;
 import io.github.mat973252.agentpermit.policy.http.HttpRiskPolicy;
@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.definition.ToolDefinition;
+import org.springframework.ai.util.JsonHelper;
 
 class GuardedToolCallbackAcceptanceTest {
 
@@ -39,7 +40,10 @@ class GuardedToolCallbackAcceptanceTest {
     var first = fixture.callback.call(input, fixture.context(null, "read-1"));
     var retry = fixture.callback.call(input, fixture.context(null, "read-1"));
 
-    assertEquals("{\"outcome\":\"EXECUTED\",\"reasonCode\":\"HTTP_READ_ONLY\"}", first);
+    assertEquals(
+        "{\"outcome\":\"EXECUTED\",\"reasonCode\":\"HTTP_READ_ONLY\","
+            + "\"output\":\"api-response-1\"}",
+        first);
     assertEquals(first, retry);
     assertEquals(1, fixture.sideEffects.get());
   }
@@ -58,7 +62,10 @@ class GuardedToolCallbackAcceptanceTest {
         fixture.callback.call(input, fixture.context(request.id(), "write-approved"));
 
     assertTrue(pending.contains("\"outcome\":\"APPROVAL_REQUIRED\""));
-    assertEquals("{\"outcome\":\"EXECUTED\",\"reasonCode\":\"HTTP_WRITE\"}", approved);
+    assertEquals(
+        "{\"outcome\":\"EXECUTED\",\"reasonCode\":\"HTTP_WRITE\","
+            + "\"output\":\"api-response-1\"}",
+        approved);
     assertEquals(1, fixture.sideEffects.get());
   }
 
@@ -99,6 +106,20 @@ class GuardedToolCallbackAcceptanceTest {
     assertEquals(0, fixture.sideEffects.get());
   }
 
+  @Test
+  void safelySerializesToolOutputAsJson() {
+    var output = "quoted \"value\" with \\ and\na new line";
+    var fixture = new Fixture(output);
+
+    var response =
+        fixture.callback.call(
+            "{\"uri\":\"https://api.example.com/items\",\"method\":\"GET\"}",
+            fixture.context(null, "escaped-output"));
+    var envelope = new JsonHelper().fromJsonToMap(response);
+
+    assertEquals(output, envelope.get("output"));
+  }
+
   private static final class Fixture {
 
     private final AtomicInteger sideEffects = new AtomicInteger();
@@ -108,27 +129,40 @@ class GuardedToolCallbackAcceptanceTest {
             () -> "spring-approval",
             new InvocationFingerprinter());
     private final SpringAiInvocationMapper mapper = mapper();
+    private final String fixedOutput;
     private final GuardedToolCallback callback;
 
     private Fixture() {
-      this(invocation -> new GateDecision(true, "HTTP_AUTHORIZED"));
+      this(invocation -> new GateDecision(true, "HTTP_AUTHORIZED"), null);
     }
 
     private Fixture(Authorizer authorizer) {
+      this(authorizer, null);
+    }
+
+    private Fixture(String fixedOutput) {
+      this(invocation -> new GateDecision(true, "HTTP_AUTHORIZED"), fixedOutput);
+    }
+
+    private Fixture(Authorizer authorizer, String fixedOutput) {
+      this.fixedOutput = fixedOutput;
       callback = callback(authorizer);
     }
 
     private GuardedToolCallback callback(Authorizer authorizer) {
       var pipeline =
-          new DecisionPipeline(
-              new DecisionPipeline.Dependencies(
+          new ResultDecisionPipeline(
+              new ResultDecisionPipeline.Dependencies(
                   invocation -> new GateDecision(true, "VALIDATED"),
                   invocation -> invocation,
                   authorizer,
                   new HttpRiskEvaluator(new HttpRiskPolicy(Set.of("api.example.com"), 1024)),
                   approvals,
-                  new InMemoryIdempotencyGuard(),
-                  invocation -> sideEffects.incrementAndGet(),
+                  new InMemoryResultIdempotencyGuard(),
+                  invocation -> {
+                    var execution = sideEffects.incrementAndGet();
+                    return fixedOutput == null ? "api-response-" + execution : fixedOutput;
+                  },
                   new InMemoryAuditLog()));
       var definition =
           ToolDefinition.builder()
