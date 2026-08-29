@@ -60,7 +60,7 @@ var riskEvaluator =
 
 Playground 包含真实的 Spring AI 2.0 `ToolCallback` 样例。模型提供的扁平 JSON 参数会映射成 `ToolInvocation`；主体、租户、环境、审批号和幂等键只从可信的 `ToolContext` 获取；外部副作用只能在共享 `DecisionPipeline` 内发生。
 
-当前执行端口没有业务结果 payload，因此回调只返回 `{"outcome":"...","reasonCode":"..."}` 决策信封。它暂时不是公开 starter API。验收测试已覆盖低风险执行、审批后恢复、SSRF 拒绝、上下文非法和幂等重试。
+成功执行后，回调返回 `{"outcome":"...","reasonCode":"...","output":"..."}`；未执行终态不会携带 `output`。结果型管线会为幂等重试缓存完全相同的字符串输出，但审计事件仍只保存决策元数据。它暂时不是公开 starter API。验收测试已覆盖低风险结果、审批后恢复、SSRF 拒绝、上下文非法、失败隔离和并发幂等重试。
 
 ## 运行 Playground
 
@@ -115,7 +115,8 @@ Linux/macOS：
 - 当前幂等和审计实现是单进程内存适配器，不提供跨进程 exactly-once 保证；
 - Playground 使用真实决策管线，但副作用端口是内存计数器；
 - 当前内置动态规则覆盖 SQL、受保护文件路径、HTTP／SSRF 和部署场景；
-- Spring AI 拦截目前只在 Playground 中提供决策信封样例，不支持业务结果透传；
+- Spring AI 拦截目前只在 Playground 中提供结果型样例，尚未提取为可复用适配器；
+- 结果输出按字符串处理并由进程内幂等组件缓存，不会写入审计事件；
 - 持久化存储、分布式协调和可复用 Spring starter 属于后续版本。
 
 ## 许可证

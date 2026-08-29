@@ -31,6 +31,7 @@ The backlog is ordered by proof of value. Each item includes an observable accep
 
 - [ ] Add Spring AI tool interception and context mapping.
   - [x] Prove a Spring AI 2.0 `ToolCallback` sample that maps trusted `ToolContext` metadata and routes every side effect through `DecisionPipeline`.
+  - [x] Add a separate result-bearing execution contract that returns idempotent tool output without adding it to audit decisions.
   - [ ] Extract a reusable adapter after result-bearing execution semantics stabilize.
 - [ ] Add Spring Boot auto-configuration and starter modules only after the core API stabilizes.
 - [ ] Add JDBC approval/audit storage and Redis idempotency adapters.

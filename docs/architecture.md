@@ -64,6 +64,8 @@ Every terminal result emits a minimal `DecisionAuditEvent` containing tool, prin
 
 The pipeline depends on the `RiskEvaluator` interface rather than tool-specific code. SQL and HTTP evaluators are selected through `RiskEvaluatorRegistry` without changing pipeline control flow.
 
+`DecisionPipeline` keeps the original void `ToolExecutor` contract. `ResultDecisionPipeline` is a parallel, framework-neutral path for tools that return immutable string output such as serialized API responses. Both pipelines use the same package-internal `DecisionPreflight`, so validation, normalization, authorization, risk, approval, and audit ordering cannot drift. `ToolExecutionResult` keeps the business output separate from `DecisionResult`; output is required only for `EXECUTED` and forbidden for denied, approval-required, or failed decisions.
+
 ## Protected file resources
 
 `ProtectedPathAuthorizer` implements the Java `Authorizer` SPI for the first protected-resource policy. It allows normal reads such as `/workspace/README.md`, but denies deletion of `/workspace` and recursive deletion of its descendants with `PROTECTED_PATH`. A file action paired with a non-file resource is denied to prevent type-disguise bypasses.
@@ -84,6 +86,8 @@ For `HIGH` and `CRITICAL` risk, `DecisionPipeline.process(invocation, approvalRe
 
 `InMemoryIdempotencyGuard` atomically binds the key to the normalized invocation fingerprint. Concurrent callers with the same key and fingerprint share one `CompletableFuture<DecisionResult>` and therefore one executor call. Both `EXECUTED` and `FAILED / EXECUTION_FAILED` results remain cached because an executor exception can leave the external side effect in an unknown state. Reusing a key with another fingerprint returns `DENIED / IDEMPOTENCY_INVOCATION_MISMATCH` without a new side effect.
 
+`InMemoryResultIdempotencyGuard` applies the same coordination to the complete `ToolExecutionResult`. Concurrent and later retries therefore receive the exact cached output without re-running the tool. Failed results remain cached without output, and a fingerprint mismatch never exposes the output stored under the reused key. The void and result guards share one package-internal coordinator rather than duplicating concurrency logic.
+
 This guarantee is scoped to one guard instance in one process. Entries are not persisted or evicted, and the implementation does not claim cross-process exactly-once delivery. Each request still emits its own terminal decision audit timeline as described below.
 
 ## Append-only audit timeline
@@ -100,7 +104,7 @@ The first Spring AI 2.0 integration is deliberately contained in `agent-permit-p
 
 `SpringAiInvocationMapper` accepts a flat JSON object of scalar arguments. Principal, tenant, environment, optional approval request ID, and required idempotency key come only from Spring AI `ToolContext`, which is transport metadata not supplied to the model. Missing trusted context, invalid JSON, nested values, and missing resource identifiers fail closed with stable Spring mapping reason codes and zero side effects. Unexpected pipeline exceptions are reduced to `FAILED / SPRING_AI_PIPELINE_FAILED`; exception messages and raw input are not returned.
 
-The current `ToolExecutor` returns no business value, so the callback returns only a deterministic JSON decision envelope containing `outcome` and `reasonCode`. It does not claim to adapt result-bearing tools. A reusable Spring starter and a result-bearing execution contract remain deferred until that public API is designed and proven.
+The callback uses `ResultDecisionPipeline`. Every response contains `outcome` and `reasonCode`; an `EXECUTED` response also contains the string `output` returned by the tool. JSON serialization escapes the output instead of concatenating raw content. Output is cached for in-memory idempotent retries but is never passed to the audit sink. The adapter remains an internal Playground sample; extraction into a reusable Spring module and starter is still deferred.
 
 ## Reproducible Playground
 

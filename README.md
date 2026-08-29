@@ -55,7 +55,7 @@ The registry and policy take immutable snapshots. A configuration system can bui
 
 The Playground contains a real Spring AI 2.0 `ToolCallback` sample. It maps model-provided flat JSON arguments to `ToolInvocation`, reads principal, tenant, environment, approval, and idempotency metadata from trusted `ToolContext`, and routes the side effect through the shared `DecisionPipeline`.
 
-The callback currently returns only `{"outcome":"...","reasonCode":"..."}` because the execution port has no business-result payload. The sample is intentionally not a public starter API yet. Its acceptance tests cover low-risk execution, approval and resume, SSRF denial, invalid context, and idempotent retry.
+The callback returns `{"outcome":"...","reasonCode":"...","output":"..."}` after successful execution. Non-executed decisions omit `output`. The result-bearing pipeline caches the exact string output for idempotent retries while audit events keep only decision metadata. The sample is intentionally not a public starter API yet. Its acceptance tests cover low-risk output, approval and resume, SSRF denial, invalid context, failure isolation, and concurrent idempotent retry.
 
 ## Run the Playground
 
