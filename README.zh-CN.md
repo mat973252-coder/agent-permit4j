@@ -8,7 +8,7 @@ AgentPermit4j 位于 AI 模型与外部系统之间，为每次工具调用强�
 
 ## 项目状态
 
-**v0.1 可信执行闭环**已经实现，包括：通用调用模型、Java 策略、动态 SQL 风险评估、审批指纹与过期控制、内存幂等、只追加审计时间线，以及本地 Playground。首个 v0.2 切片进一步加入运行时 evaluator 路由和可配置 HTTP 风险策略；Spring 集成与分布式适配器仍属于后续范围。
+**v0.1 可信执行闭环**已经实现，包括：通用调用模型、Java 策略、动态 SQL 风险评估、审批指纹与过期控制、内存幂等、只追加审计时间线，以及本地 Playground。首批 v0.2 切片进一步加入运行时 evaluator 路由、可配置 HTTP 风险策略，以及内部 Spring AI 2.0 `ToolCallback` 拦截样例；可复用 Spring starter 与分布式适配器仍属于后续范围。
 
 ## 为什么需要这个项目
 
@@ -55,6 +55,12 @@ var riskEvaluator =
 ```
 
 注册表和策略都会保存不可变快照。配置发生变化时，应用层可以构造并原子替换新快照；可复用 policy 模块本身不会监听 YAML、环境变量或远程配置中心。
+
+## Spring AI 拦截样例
+
+Playground 包含真实的 Spring AI 2.0 `ToolCallback` 样例。模型提供的扁平 JSON 参数会映射成 `ToolInvocation`；主体、租户、环境、审批号和幂等键只从可信的 `ToolContext` 获取；外部副作用只能在共享 `DecisionPipeline` 内发生。
+
+当前执行端口没有业务结果 payload，因此回调只返回 `{"outcome":"...","reasonCode":"..."}` 决策信封。它暂时不是公开 starter API。验收测试已覆盖低风险执行、审批后恢复、SSRF 拒绝、上下文非法和幂等重试。
 
 ## 运行 Playground
 
@@ -108,8 +114,9 @@ Linux/macOS：
 
 - 当前幂等和审计实现是单进程内存适配器，不提供跨进程 exactly-once 保证；
 - Playground 使用真实决策管线，但副作用端口是内存计数器；
-- 当前内置动态规则覆盖 SQL、受保护文件路径和部署场景；
-- HTTP／SSRF 风险规则、持久化存储和分布式协调属于后续版本。
+- 当前内置动态规则覆盖 SQL、受保护文件路径、HTTP／SSRF 和部署场景；
+- Spring AI 拦截目前只在 Playground 中提供决策信封样例，不支持业务结果透传；
+- 持久化存储、分布式协调和可复用 Spring starter 属于后续版本。
 
 ## 许可证
 

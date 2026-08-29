@@ -94,6 +94,14 @@ An approved high-risk path records `POLICY → RISK → APPROVAL → EXECUTION �
 
 `replaySafeView(timelineId)` filters and orders already-recorded events into an immutable `ReplaySafeAuditView`. It does not receive or invoke a pipeline, policy, approval service, idempotency guard, or executor, so viewing the timeline cannot repeat a side effect. The current log is process-local and non-persistent; JDBC storage, retention, signatures, and cross-process transport remain outside P0.
 
+## Spring AI interception sample
+
+The first Spring AI 2.0 integration is deliberately contained in `agent-permit-playground`. `GuardedToolCallback` is the registered Spring tool and routes every call through one long-lived `DecisionPipeline`; it never invokes another callback after the decision. Keeping the external side effect inside the pipeline preserves approval, idempotency, and audit semantics.
+
+`SpringAiInvocationMapper` accepts a flat JSON object of scalar arguments. Principal, tenant, environment, optional approval request ID, and required idempotency key come only from Spring AI `ToolContext`, which is transport metadata not supplied to the model. Missing trusted context, invalid JSON, nested values, and missing resource identifiers fail closed with stable Spring mapping reason codes and zero side effects. Unexpected pipeline exceptions are reduced to `FAILED / SPRING_AI_PIPELINE_FAILED`; exception messages and raw input are not returned.
+
+The current `ToolExecutor` returns no business value, so the callback returns only a deterministic JSON decision envelope containing `outcome` and `reasonCode`. It does not claim to adapt result-bearing tools. A reusable Spring starter and a result-bearing execution contract remain deferred until that public API is designed and proven.
+
 ## Reproducible Playground
 
 `agent-permit-playground` assembles the real P0 pipeline against in-memory counters and logs. Its file cases read `/workspace/README.md` and deny recursive deletion of `/workspace`; its SQL cases execute a `SELECT`, pause a selective `UPDATE`, then execute the exact approved update; its deployment cases execute staging, pause production, then execute the exact approved production invocation.

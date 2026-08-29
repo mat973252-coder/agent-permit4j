@@ -10,7 +10,7 @@ AgentPermit4j sits between an AI model and external systems. It enforces authori
 
 ## Project status
 
-The **v0.1 trusted execution loop** is implemented: generic invocation modeling, Java policies, dynamic SQL risk, approval fingerprinting and expiry, in-memory idempotency, append-only audit timelines, and a local Playground. The first v0.2 slice adds runtime evaluator routing and configurable HTTP risk policies; Spring and distributed adapters remain future work.
+The **v0.1 trusted execution loop** is implemented: generic invocation modeling, Java policies, dynamic SQL risk, approval fingerprinting and expiry, in-memory idempotency, append-only audit timelines, and a local Playground. The first v0.2 slices add runtime evaluator routing, configurable HTTP risk policies, and an internal Spring AI 2.0 `ToolCallback` interception sample. Reusable Spring starters and distributed adapters remain future work.
 
 ## Why this project
 
@@ -50,6 +50,12 @@ var riskEvaluator =
 ```
 
 The registry and policy take immutable snapshots. A configuration system can build and atomically replace a new snapshot when configuration changes; AgentPermit4j does not watch YAML, environment variables, or a remote configuration service inside the reusable policy module.
+
+## Spring AI interception sample
+
+The Playground contains a real Spring AI 2.0 `ToolCallback` sample. It maps model-provided flat JSON arguments to `ToolInvocation`, reads principal, tenant, environment, approval, and idempotency metadata from trusted `ToolContext`, and routes the side effect through the shared `DecisionPipeline`.
+
+The callback currently returns only `{"outcome":"...","reasonCode":"..."}` because the execution port has no business-result payload. The sample is intentionally not a public starter API yet. Its acceptance tests cover low-risk execution, approval and resume, SSRF denial, invalid context, and idempotent retry.
 
 ## Run the Playground
 
