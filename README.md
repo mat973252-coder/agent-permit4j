@@ -10,7 +10,7 @@ AgentPermit4j sits between an AI model and external systems. It enforces authori
 
 ## Project status
 
-The **v0.1 trusted execution loop** is implemented: generic invocation modeling, Java policies, dynamic SQL risk, approval fingerprinting and expiry, in-memory idempotency, append-only audit timelines, and a local Playground. The first v0.2 slices add runtime evaluator routing, configurable HTTP risk policies, and an internal Spring AI 2.0 `ToolCallback` interception sample. Reusable Spring starters and distributed adapters remain future work.
+The **v0.1 trusted execution loop** is implemented: generic invocation modeling, Java policies, dynamic SQL risk, approval fingerprinting and expiry, in-memory idempotency, append-only audit timelines, and a local Playground. The first v0.2 slices add runtime evaluator routing, configurable HTTP risk policies, and a reusable Spring AI 2.0 `ToolCallback` adapter. Spring Boot auto-configuration and distributed adapters remain future work.
 
 ## Why this project
 
@@ -24,6 +24,7 @@ agent-permit-policy       policy and dynamic risk evaluation SPI
 agent-permit-execution    guarded execution pipeline and idempotency
 agent-permit-approval     approval lifecycle and argument fingerprinting
 agent-permit-audit        append-only audit events
+agent-permit-spring-ai    reusable Spring AI ToolCallback adapter
 agent-permit-playground   Developer Workspace Agent demo
 ```
 
@@ -51,11 +52,17 @@ var riskEvaluator =
 
 The registry and policy take immutable snapshots. A configuration system can build and atomically replace a new snapshot when configuration changes; AgentPermit4j does not watch YAML, environment variables, or a remote configuration service inside the reusable policy module.
 
-## Spring AI interception sample
+## Spring AI adapter
 
-The Playground contains a real Spring AI 2.0 `ToolCallback` sample. It maps model-provided flat JSON arguments to `ToolInvocation`, reads principal, tenant, environment, approval, and idempotency metadata from trusted `ToolContext`, and routes the side effect through the shared `DecisionPipeline`.
+`agent-permit-spring-ai` exposes a reusable Spring AI 2.0 `ToolCallback`. Applications provide a `ToolDefinition`, a configured `ResultDecisionPipeline`, and an immutable `SpringAiToolContract`:
 
-The callback returns `{"outcome":"...","reasonCode":"...","output":"..."}` after successful execution. Non-executed decisions omit `output`. The result-bearing pipeline caches the exact string output for idempotent retries while audit events keep only decision metadata. The sample is intentionally not a public starter API yet. Its acceptance tests cover low-risk output, approval and resume, SSRF denial, invalid context, failure isolation, and concurrent idempotent retry.
+```java
+ToolCallback callback = new GuardedToolCallback(definition, pipeline, contract);
+```
+
+The adapter maps model-provided flat JSON arguments to `ToolInvocation`. Principal, tenant, environment, optional approval ID, and the required idempotency key are read only from trusted `ToolContext` entries named by `SpringAiToolContextKeys`; model arguments using those names are discarded. Every external side effect remains inside the injected pipeline.
+
+The callback returns `{"outcome":"...","reasonCode":"...","output":"..."}` after successful execution. Non-executed decisions omit `output`. The result-bearing pipeline caches the exact string output for idempotent retries while audit events keep only decision metadata. The adapter performs no bean discovery, property binding, identity resolution, or auto-configuration; those remain explicit application responsibilities until the later Spring Boot starter slice. Acceptance tests cover public construction, trusted mapping, low-risk output, approval and resume, SSRF denial, invalid context, failure isolation, and idempotent retry.
 
 ## Run the Playground
 

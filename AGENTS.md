@@ -4,7 +4,7 @@
 
 - Read `docs/architecture.md` before changing domain boundaries or public APIs.
 - Use `TODO.md` acceptance checks to define the next observable behavior.
-- Keep the six module responsibilities and dependency direction described in `README.md`.
+- Keep the module responsibilities and dependency direction described in `README.md`.
 - Treat the invariants in `docs/architecture.md` as non-negotiable security contracts.
 
 ## Working loop

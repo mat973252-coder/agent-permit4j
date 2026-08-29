@@ -1,4 +1,4 @@
-package io.github.mat973252.agentpermit.playground.springai;
+package io.github.mat973252.agentpermit.springai;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -27,7 +27,7 @@ class SpringAiInvocationMapperTest {
             context("request-1", "key-1"));
 
     assertEquals("workspace-agent", mapped.invocation().principal().id());
-    assertFalse(mapped.invocation().arguments().containsKey(SpringAiInvocationMapper.PRINCIPAL_ID));
+    assertFalse(mapped.invocation().arguments().containsKey(SpringAiToolContextKeys.PRINCIPAL_ID));
     assertEquals("tenant-a", mapped.invocation().context().tenantId());
     assertEquals("production", mapped.invocation().context().environment());
     assertEquals("https://api.example.com/items", mapped.invocation().resource().identifier());
@@ -35,7 +35,8 @@ class SpringAiInvocationMapperTest {
     assertEquals("2", mapped.invocation().arguments().get("limit"));
     assertEquals("request-1", mapped.approvalRequestId());
     assertEquals("key-1", mapped.idempotencyKey());
-    assertFalse(mapped.invocation().arguments().containsKey(SpringAiInvocationMapper.IDEMPOTENCY_KEY));
+    assertFalse(
+        mapped.invocation().arguments().containsKey(SpringAiToolContextKeys.IDEMPOTENCY_KEY));
   }
 
   @Test
@@ -88,7 +89,7 @@ class SpringAiInvocationMapperTest {
 
   private static SpringAiInvocationMapper mapper() {
     return new SpringAiInvocationMapper(
-        new SpringAiInvocationMapper.Contract(
+        new SpringAiToolContract(
             new ToolDescriptor(
                 "http.request",
                 ToolEffect.EXECUTE,
@@ -101,14 +102,14 @@ class SpringAiInvocationMapperTest {
 
   private static ToolContext context(String approvalRequestId, String idempotencyKey) {
     var values = new HashMap<String, Object>();
-    values.put(SpringAiInvocationMapper.PRINCIPAL_ID, "workspace-agent");
-    values.put(SpringAiInvocationMapper.TENANT_ID, "tenant-a");
-    values.put(SpringAiInvocationMapper.ENVIRONMENT, "production");
+    values.put(SpringAiToolContextKeys.PRINCIPAL_ID, "workspace-agent");
+    values.put(SpringAiToolContextKeys.TENANT_ID, "tenant-a");
+    values.put(SpringAiToolContextKeys.ENVIRONMENT, "production");
     if (approvalRequestId != null) {
-      values.put(SpringAiInvocationMapper.APPROVAL_REQUEST_ID, approvalRequestId);
+      values.put(SpringAiToolContextKeys.APPROVAL_REQUEST_ID, approvalRequestId);
     }
     if (idempotencyKey != null) {
-      values.put(SpringAiInvocationMapper.IDEMPOTENCY_KEY, idempotencyKey);
+      values.put(SpringAiToolContextKeys.IDEMPOTENCY_KEY, idempotencyKey);
     }
     return new ToolContext(Map.copyOf(values));
   }

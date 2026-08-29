@@ -98,13 +98,19 @@ An approved high-risk path records `POLICY → RISK → APPROVAL → EXECUTION �
 
 `replaySafeView(timelineId)` filters and orders already-recorded events into an immutable `ReplaySafeAuditView`. It does not receive or invoke a pipeline, policy, approval service, idempotency guard, or executor, so viewing the timeline cannot repeat a side effect. The current log is process-local and non-persistent; JDBC storage, retention, signatures, and cross-process transport remain outside P0.
 
-## Spring AI interception sample
+## Spring AI adapter
 
-The first Spring AI 2.0 integration is deliberately contained in `agent-permit-playground`. `GuardedToolCallback` is the registered Spring tool and routes every call through one long-lived `DecisionPipeline`; it never invokes another callback after the decision. Keeping the external side effect inside the pipeline preserves approval, idempotency, and audit semantics.
+`agent-permit-spring-ai` is a reusable adapter module that depends on `agent-permit-core`, `agent-permit-execution`, and Spring AI's model API. No framework dependency flows back into core, policy, approval, audit, or execution. `agent-permit-playground` consumes the adapter for end-to-end acceptance coverage rather than owning the implementation.
+
+The public surface is deliberately small. Applications construct `GuardedToolCallback` from a Spring AI `ToolDefinition`, a long-lived `ResultDecisionPipeline`, and an immutable `SpringAiToolContract`; construction rejects a definition name that differs from the contract descriptor name. `SpringAiToolContextKeys` publishes the five transport key names. JSON mapping and mapping exceptions remain package-internal so callers cannot bypass or partially reassemble the trusted mapping path.
+
+`GuardedToolCallback` is the registered Spring tool and routes every call through the injected pipeline; it never invokes another callback after the decision. Keeping the external side effect inside the pipeline preserves approval, idempotency, and audit semantics.
 
 `SpringAiInvocationMapper` accepts a flat JSON object of scalar arguments. Principal, tenant, environment, optional approval request ID, and required idempotency key come only from Spring AI `ToolContext`, which is transport metadata not supplied to the model. Missing trusted context, invalid JSON, nested values, and missing resource identifiers fail closed with stable Spring mapping reason codes and zero side effects. Unexpected pipeline exceptions are reduced to `FAILED / SPRING_AI_PIPELINE_FAILED`; exception messages and raw input are not returned.
 
-The callback uses `ResultDecisionPipeline`. Every response contains `outcome` and `reasonCode`; an `EXECUTED` response also contains the string `output` returned by the tool. JSON serialization escapes the output instead of concatenating raw content. Output is cached for in-memory idempotent retries but is never passed to the audit sink. The adapter remains an internal Playground sample; extraction into a reusable Spring module and starter is still deferred.
+The callback uses `ResultDecisionPipeline`. Every response contains `outcome` and `reasonCode`; an `EXECUTED` response also contains the string `output` returned by the tool. JSON serialization escapes the output instead of concatenating raw content. Output is cached for in-memory idempotent retries but is never passed to the audit sink.
+
+The adapter performs no component scanning, property binding, bean discovery, identity resolution, or security-context access. Spring Boot auto-configuration and starter packaging remain deferred until this explicit adapter contract has further integration use.
 
 ## Reproducible Playground
 

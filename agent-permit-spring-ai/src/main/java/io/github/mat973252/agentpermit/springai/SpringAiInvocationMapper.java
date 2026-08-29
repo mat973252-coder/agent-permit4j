@@ -1,10 +1,8 @@
-package io.github.mat973252.agentpermit.playground.springai;
+package io.github.mat973252.agentpermit.springai;
 
-import io.github.mat973252.agentpermit.core.Action;
 import io.github.mat973252.agentpermit.core.InvocationContext;
 import io.github.mat973252.agentpermit.core.Principal;
 import io.github.mat973252.agentpermit.core.Resource;
-import io.github.mat973252.agentpermit.core.ToolDescriptor;
 import io.github.mat973252.agentpermit.core.ToolInvocation;
 import java.util.HashMap;
 import java.util.Map;
@@ -15,21 +13,20 @@ import org.springframework.ai.util.JsonHelper;
 
 final class SpringAiInvocationMapper {
 
-  static final String PRINCIPAL_ID = "agentPermit.principalId";
-  static final String TENANT_ID = "agentPermit.tenantId";
-  static final String ENVIRONMENT = "agentPermit.environment";
-  static final String APPROVAL_REQUEST_ID = "agentPermit.approvalRequestId";
-  static final String IDEMPOTENCY_KEY = "agentPermit.idempotencyKey";
-
   private static final String INPUT_INVALID = "SPRING_AI_INPUT_INVALID";
   private static final String CONTEXT_INVALID = "SPRING_AI_CONTEXT_INVALID";
   private static final Set<String> TRANSPORT_KEYS =
-      Set.of(PRINCIPAL_ID, TENANT_ID, ENVIRONMENT, APPROVAL_REQUEST_ID, IDEMPOTENCY_KEY);
+      Set.of(
+          SpringAiToolContextKeys.PRINCIPAL_ID,
+          SpringAiToolContextKeys.TENANT_ID,
+          SpringAiToolContextKeys.ENVIRONMENT,
+          SpringAiToolContextKeys.APPROVAL_REQUEST_ID,
+          SpringAiToolContextKeys.IDEMPOTENCY_KEY);
 
-  private final Contract contract;
+  private final SpringAiToolContract contract;
   private final JsonHelper json = new JsonHelper();
 
-  SpringAiInvocationMapper(Contract contract) {
+  SpringAiInvocationMapper(SpringAiToolContract contract) {
     this.contract = Objects.requireNonNull(contract, "contract");
   }
 
@@ -71,11 +68,11 @@ final class SpringAiInvocationMapper {
     }
     var values = toolContext.getContext();
     return new TrustedContext(
-        requiredText(values.get(PRINCIPAL_ID), CONTEXT_INVALID),
-        requiredText(values.get(TENANT_ID), CONTEXT_INVALID),
-        requiredText(values.get(ENVIRONMENT), CONTEXT_INVALID),
-        optionalText(values.get(APPROVAL_REQUEST_ID)),
-        requiredText(values.get(IDEMPOTENCY_KEY), CONTEXT_INVALID));
+        requiredText(values.get(SpringAiToolContextKeys.PRINCIPAL_ID), CONTEXT_INVALID),
+        requiredText(values.get(SpringAiToolContextKeys.TENANT_ID), CONTEXT_INVALID),
+        requiredText(values.get(SpringAiToolContextKeys.ENVIRONMENT), CONTEXT_INVALID),
+        optionalText(values.get(SpringAiToolContextKeys.APPROVAL_REQUEST_ID)),
+        requiredText(values.get(SpringAiToolContextKeys.IDEMPOTENCY_KEY), CONTEXT_INVALID));
   }
 
   private static String scalarText(Object value) {
@@ -97,28 +94,6 @@ final class SpringAiInvocationMapper {
       return null;
     }
     return requiredText(value, CONTEXT_INVALID);
-  }
-
-  record Contract(
-      ToolDescriptor descriptor,
-      Action action,
-      String resourceType,
-      String resourceIdentifierArgument) {
-
-    Contract {
-      descriptor = Objects.requireNonNull(descriptor, "descriptor");
-      action = Objects.requireNonNull(action, "action");
-      resourceType = requireContractText(resourceType, "resourceType");
-      resourceIdentifierArgument =
-          requireContractText(resourceIdentifierArgument, "resourceIdentifierArgument");
-    }
-
-    private static String requireContractText(String value, String name) {
-      if (value == null || value.isBlank()) {
-        throw new IllegalArgumentException(name + " must not be blank");
-      }
-      return value;
-    }
   }
 
   record MappedToolCall(

@@ -1,4 +1,4 @@
-package io.github.mat973252.agentpermit.playground.springai;
+package io.github.mat973252.agentpermit.springai;
 
 final class SpringAiMappingException extends RuntimeException {
 

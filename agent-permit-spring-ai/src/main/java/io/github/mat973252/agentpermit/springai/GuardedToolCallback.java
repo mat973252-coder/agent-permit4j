@@ -1,4 +1,4 @@
-package io.github.mat973252.agentpermit.playground.springai;
+package io.github.mat973252.agentpermit.springai;
 
 import io.github.mat973252.agentpermit.execution.ResultDecisionPipeline;
 import io.github.mat973252.agentpermit.execution.ToolExecutionResult;
@@ -9,7 +9,7 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.util.JsonHelper;
 
-final class GuardedToolCallback implements ToolCallback {
+public final class GuardedToolCallback implements ToolCallback {
 
   private static final String PIPELINE_FAILED = "SPRING_AI_PIPELINE_FAILED";
 
@@ -18,11 +18,18 @@ final class GuardedToolCallback implements ToolCallback {
   private final SpringAiInvocationMapper mapper;
   private final JsonHelper json = new JsonHelper();
 
-  GuardedToolCallback(
-      ToolDefinition definition, ResultDecisionPipeline pipeline, SpringAiInvocationMapper mapper) {
+  public GuardedToolCallback(
+      ToolDefinition definition,
+      ResultDecisionPipeline pipeline,
+      SpringAiToolContract contract) {
     this.definition = Objects.requireNonNull(definition, "definition");
     this.pipeline = Objects.requireNonNull(pipeline, "pipeline");
-    this.mapper = Objects.requireNonNull(mapper, "mapper");
+    var requiredContract = Objects.requireNonNull(contract, "contract");
+    if (!definition.name().equals(requiredContract.descriptor().name())) {
+      throw new IllegalArgumentException(
+          "definition name must match contract descriptor name");
+    }
+    mapper = new SpringAiInvocationMapper(requiredContract);
   }
 
   @Override

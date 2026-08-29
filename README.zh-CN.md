@@ -8,7 +8,7 @@ AgentPermit4j 位于 AI 模型与外部系统之间，为每次工具调用强�
 
 ## 项目状态
 
-**v0.1 可信执行闭环**已经实现，包括：通用调用模型、Java 策略、动态 SQL 风险评估、审批指纹与过期控制、内存幂等、只追加审计时间线，以及本地 Playground。首批 v0.2 切片进一步加入运行时 evaluator 路由、可配置 HTTP 风险策略，以及内部 Spring AI 2.0 `ToolCallback` 拦截样例；可复用 Spring starter 与分布式适配器仍属于后续范围。
+**v0.1 可信执行闭环**已经实现，包括：通用调用模型、Java 策略、动态 SQL 风险评估、审批指纹与过期控制、内存幂等、只追加审计时间线，以及本地 Playground。首批 v0.2 切片进一步加入运行时 evaluator 路由、可配置 HTTP 风险策略，以及可复用的 Spring AI 2.0 `ToolCallback` 适配器；Spring Boot 自动配置与分布式适配器仍属于后续范围。
 
 ## 为什么需要这个项目
 
@@ -22,6 +22,7 @@ agent-permit-policy       策略和动态风险评估 SPI
 agent-permit-execution    受保护的执行管线与幂等控制
 agent-permit-approval     审批生命周期与调用参数指纹
 agent-permit-audit        只追加审计事件
+agent-permit-spring-ai    可复用 Spring AI ToolCallback 适配器
 agent-permit-playground   Developer Workspace Agent 演示
 ```
 
@@ -56,11 +57,17 @@ var riskEvaluator =
 
 注册表和策略都会保存不可变快照。配置发生变化时，应用层可以构造并原子替换新快照；可复用 policy 模块本身不会监听 YAML、环境变量或远程配置中心。
 
-## Spring AI 拦截样例
+## Spring AI 适配器
 
-Playground 包含真实的 Spring AI 2.0 `ToolCallback` 样例。模型提供的扁平 JSON 参数会映射成 `ToolInvocation`；主体、租户、环境、审批号和幂等键只从可信的 `ToolContext` 获取；外部副作用只能在共享 `DecisionPipeline` 内发生。
+`agent-permit-spring-ai` 提供可复用的 Spring AI 2.0 `ToolCallback`。应用显式提供 `ToolDefinition`、已经配置好的 `ResultDecisionPipeline` 和不可变的 `SpringAiToolContract`：
 
-成功执行后，回调返回 `{"outcome":"...","reasonCode":"...","output":"..."}`；未执行终态不会携带 `output`。结果型管线会为幂等重试缓存完全相同的字符串输出，但审计事件仍只保存决策元数据。它暂时不是公开 starter API。验收测试已覆盖低风险结果、审批后恢复、SSRF 拒绝、上下文非法、失败隔离和并发幂等重试。
+```java
+ToolCallback callback = new GuardedToolCallback(definition, pipeline, contract);
+```
+
+模型提供的扁平 JSON 参数会映射成 `ToolInvocation`。主体、租户、环境、可选审批号和必填幂等键只从 `SpringAiToolContextKeys` 指定的可信 `ToolContext` 项获取；模型参数中的同名字段会被丢弃。所有外部副作用仍只能在注入的管线内发生。
+
+成功执行后，回调返回 `{"outcome":"...","reasonCode":"...","output":"..."}`；未执行终态不会携带 `output`。结果型管线会为幂等重试缓存完全相同的字符串输出，但审计事件仍只保存决策元数据。适配器不负责 Bean 扫描、属性绑定、身份解析或自动配置；在后续 Spring Boot starter 切片完成前，这些仍由应用显式装配。验收测试已覆盖公开构造、可信映射、低风险结果、审批后恢复、SSRF 拒绝、上下文非法、失败隔离和幂等重试。
 
 ## 运行 Playground
 
@@ -115,7 +122,7 @@ Linux/macOS：
 - 当前幂等和审计实现是单进程内存适配器，不提供跨进程 exactly-once 保证；
 - Playground 使用真实决策管线，但副作用端口是内存计数器；
 - 当前内置动态规则覆盖 SQL、受保护文件路径、HTTP／SSRF 和部署场景；
-- Spring AI 拦截目前只在 Playground 中提供结果型样例，尚未提取为可复用适配器；
+- Spring AI 适配器已经可复用，但当前仍需应用显式装配 pipeline、tool contract 和可信 context；
 - 结果输出按字符串处理并由进程内幂等组件缓存，不会写入审计事件；
 - 持久化存储、分布式协调和可复用 Spring starter 属于后续版本。
 

@@ -9,14 +9,21 @@ import io.github.mat973252.agentpermit.audit.InMemoryAuditLog;
 import io.github.mat973252.agentpermit.core.Action;
 import io.github.mat973252.agentpermit.core.DataSensitivity;
 import io.github.mat973252.agentpermit.core.GateDecision;
+import io.github.mat973252.agentpermit.core.InvocationContext;
+import io.github.mat973252.agentpermit.core.Principal;
 import io.github.mat973252.agentpermit.core.Reversibility;
+import io.github.mat973252.agentpermit.core.Resource;
 import io.github.mat973252.agentpermit.core.ToolDescriptor;
 import io.github.mat973252.agentpermit.core.ToolEffect;
+import io.github.mat973252.agentpermit.core.ToolInvocation;
 import io.github.mat973252.agentpermit.execution.InMemoryResultIdempotencyGuard;
 import io.github.mat973252.agentpermit.execution.ResultDecisionPipeline;
 import io.github.mat973252.agentpermit.policy.Authorizer;
 import io.github.mat973252.agentpermit.policy.http.HttpRiskEvaluator;
 import io.github.mat973252.agentpermit.policy.http.HttpRiskPolicy;
+import io.github.mat973252.agentpermit.springai.GuardedToolCallback;
+import io.github.mat973252.agentpermit.springai.SpringAiToolContract;
+import io.github.mat973252.agentpermit.springai.SpringAiToolContextKeys;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -55,7 +62,7 @@ class GuardedToolCallbackAcceptanceTest {
         "{\"uri\":\"https://api.example.com/items\",\"method\":\"POST\",\"payload\":\"{}\"}";
 
     var pending = fixture.callback.call(input, fixture.context(null, "write-pending"));
-    var invocation = fixture.mapper.map(input, fixture.context(null, "write-approved")).invocation();
+    var invocation = fixture.writeInvocation();
     var request = fixture.approvals.request(invocation, Duration.ofMinutes(5));
     fixture.approvals.approve(request.id());
     var approved =
@@ -128,7 +135,7 @@ class GuardedToolCallbackAcceptanceTest {
             Clock.fixed(Instant.parse("2026-08-29T00:00:00Z"), ZoneOffset.UTC),
             () -> "spring-approval",
             new InvocationFingerprinter());
-    private final SpringAiInvocationMapper mapper = mapper();
+    private final SpringAiToolContract contract = contract();
     private final String fixedOutput;
     private final GuardedToolCallback callback;
 
@@ -170,32 +177,44 @@ class GuardedToolCallbackAcceptanceTest {
               .description("Call an approved external HTTP API")
               .inputSchema("{\"type\":\"object\"}")
               .build();
-      return new GuardedToolCallback(definition, pipeline, mapper);
+      return new GuardedToolCallback(definition, pipeline, contract);
     }
 
     private ToolContext context(String approvalRequestId, String idempotencyKey) {
       var values = new HashMap<String, Object>();
-      values.put(SpringAiInvocationMapper.PRINCIPAL_ID, "workspace-agent");
-      values.put(SpringAiInvocationMapper.TENANT_ID, "tenant-a");
-      values.put(SpringAiInvocationMapper.ENVIRONMENT, "production");
-      values.put(SpringAiInvocationMapper.IDEMPOTENCY_KEY, idempotencyKey);
+      values.put(SpringAiToolContextKeys.PRINCIPAL_ID, "workspace-agent");
+      values.put(SpringAiToolContextKeys.TENANT_ID, "tenant-a");
+      values.put(SpringAiToolContextKeys.ENVIRONMENT, "production");
+      values.put(SpringAiToolContextKeys.IDEMPOTENCY_KEY, idempotencyKey);
       if (approvalRequestId != null) {
-        values.put(SpringAiInvocationMapper.APPROVAL_REQUEST_ID, approvalRequestId);
+        values.put(SpringAiToolContextKeys.APPROVAL_REQUEST_ID, approvalRequestId);
       }
       return new ToolContext(Map.copyOf(values));
     }
+
+    private ToolInvocation writeInvocation() {
+      return new ToolInvocation(
+          contract.descriptor(),
+          new Principal("workspace-agent", Map.of()),
+          contract.action(),
+          new Resource("http", "https://api.example.com/items", Map.of()),
+          new InvocationContext("tenant-a", "production"),
+          Map.of(
+              "uri", "https://api.example.com/items",
+              "method", "POST",
+              "payload", "{}"));
+    }
   }
 
-  private static SpringAiInvocationMapper mapper() {
-    return new SpringAiInvocationMapper(
-        new SpringAiInvocationMapper.Contract(
-            new ToolDescriptor(
-                "http.request",
-                ToolEffect.EXECUTE,
-                Reversibility.COMPENSATABLE,
-                DataSensitivity.INTERNAL),
-            new Action("http.request"),
-            "http",
-            "uri"));
+  private static SpringAiToolContract contract() {
+    return new SpringAiToolContract(
+        new ToolDescriptor(
+            "http.request",
+            ToolEffect.EXECUTE,
+            Reversibility.COMPENSATABLE,
+            DataSensitivity.INTERNAL),
+        new Action("http.request"),
+        "http",
+        "uri");
   }
 }

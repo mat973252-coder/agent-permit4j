@@ -28,6 +28,7 @@
     <module>agent-permit-execution</module>
     <module>agent-permit-approval</module>
     <module>agent-permit-audit</module>
+    <module>agent-permit-spring-ai</module>
     <module>agent-permit-playground</module>
   </modules>
 
