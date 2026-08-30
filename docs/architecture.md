@@ -110,7 +110,15 @@ The public surface is deliberately small. Applications construct `GuardedToolCal
 
 The callback uses `ResultDecisionPipeline`. Every response contains `outcome` and `reasonCode`; an `EXECUTED` response also contains the string `output` returned by the tool. JSON serialization escapes the output instead of concatenating raw content. Output is cached for in-memory idempotent retries but is never passed to the audit sink.
 
-The adapter performs no component scanning, property binding, bean discovery, identity resolution, or security-context access. Spring Boot auto-configuration and starter packaging remain deferred until this explicit adapter contract has further integration use.
+The adapter performs no component scanning, property binding, bean discovery, identity resolution, or security-context access.
+
+## Spring Boot convenience modules
+
+`agent-permit-spring-boot-starter` depends on `agent-permit-spring-boot-autoconfigure`, which depends only on the reusable Spring AI adapter and Spring Boot auto-configuration API. This preserves the dependency direction `starter → autoconfigure → spring-ai → execution/core`; no Spring Boot dependency flows into the framework-neutral modules.
+
+Boot discovers `AgentPermitSpringAiAutoConfiguration` through `AutoConfiguration.imports`. The configuration creates a `GuardedToolCallback` only from one application-provided `ToolDefinition`, one `SpringAiToolContract`, and one fully configured `ResultDecisionPipeline`. Missing inputs cause the configuration to back off, an application-provided `GuardedToolCallback` wins, and ambiguous inputs fail Spring injection rather than being selected silently.
+
+The convenience modules define no policies, executors, approval services, identity resolution, tenant propagation, property defaults, persistence, or component scanning. Auto-configuration therefore shortens explicit wiring without weakening the adapter's fail-closed trust boundary.
 
 ## Reproducible Playground
 

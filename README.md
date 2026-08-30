@@ -10,7 +10,7 @@ AgentPermit4j sits between an AI model and external systems. It enforces authori
 
 ## Project status
 
-The **v0.1 trusted execution loop** is implemented: generic invocation modeling, Java policies, dynamic SQL risk, approval fingerprinting and expiry, in-memory idempotency, append-only audit timelines, and a local Playground. The first v0.2 slices add runtime evaluator routing, configurable HTTP risk policies, and a reusable Spring AI 2.0 `ToolCallback` adapter. Spring Boot auto-configuration and distributed adapters remain future work.
+The **v0.1 trusted execution loop** is implemented: generic invocation modeling, Java policies, dynamic SQL risk, approval fingerprinting and expiry, in-memory idempotency, append-only audit timelines, and a local Playground. The first v0.2 slices add runtime evaluator routing, configurable HTTP risk policies, a reusable Spring AI 2.0 `ToolCallback` adapter, and minimal Spring Boot auto-configuration. Distributed adapters remain future work.
 
 ## Why this project
 
@@ -25,6 +25,8 @@ agent-permit-execution    guarded execution pipeline and idempotency
 agent-permit-approval     approval lifecycle and argument fingerprinting
 agent-permit-audit        append-only audit events
 agent-permit-spring-ai    reusable Spring AI ToolCallback adapter
+agent-permit-spring-boot-autoconfigure  safe callback auto-configuration
+agent-permit-spring-boot-starter        Spring Boot starter dependency
 agent-permit-playground   Developer Workspace Agent demo
 ```
 
@@ -62,7 +64,23 @@ ToolCallback callback = new GuardedToolCallback(definition, pipeline, contract);
 
 The adapter maps model-provided flat JSON arguments to `ToolInvocation`. Principal, tenant, environment, optional approval ID, and the required idempotency key are read only from trusted `ToolContext` entries named by `SpringAiToolContextKeys`; model arguments using those names are discarded. Every external side effect remains inside the injected pipeline.
 
-The callback returns `{"outcome":"...","reasonCode":"...","output":"..."}` after successful execution. Non-executed decisions omit `output`. The result-bearing pipeline caches the exact string output for idempotent retries while audit events keep only decision metadata. The adapter performs no bean discovery, property binding, identity resolution, or auto-configuration; those remain explicit application responsibilities until the later Spring Boot starter slice. Acceptance tests cover public construction, trusted mapping, low-risk output, approval and resume, SSRF denial, invalid context, failure isolation, and idempotent retry.
+The callback returns `{"outcome":"...","reasonCode":"...","output":"..."}` after successful execution. Non-executed decisions omit `output`. The result-bearing pipeline caches the exact string output for idempotent retries while audit events keep only decision metadata. The adapter itself performs no bean discovery, property binding, identity resolution, or auto-configuration. Acceptance tests cover public construction, trusted mapping, low-risk output, approval and resume, SSRF denial, invalid context, failure isolation, and idempotent retry.
+
+## Spring Boot starter
+
+Spring Boot 4 applications can depend on the convenience starter:
+
+```xml
+<dependency>
+  <groupId>io.github.mat973252</groupId>
+  <artifactId>agent-permit-spring-boot-starter</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+</dependency>
+```
+
+The application must provide exactly one `ToolDefinition`, `SpringAiToolContract`, and fully configured `ResultDecisionPipeline`. The auto-configuration then creates one `GuardedToolCallback`. It backs off when any input is missing or when the application already provides that callback. Ambiguous inputs fail normal Spring injection instead of choosing silently.
+
+The starter does not invent policies, executors, approval services, identity, tenant data, or permissive defaults. These security-sensitive dependencies remain explicit application beans.
 
 ## Run the Playground
 

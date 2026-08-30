@@ -8,7 +8,7 @@ AgentPermit4j 位于 AI 模型与外部系统之间，为每次工具调用强�
 
 ## 项目状态
 
-**v0.1 可信执行闭环**已经实现，包括：通用调用模型、Java 策略、动态 SQL 风险评估、审批指纹与过期控制、内存幂等、只追加审计时间线，以及本地 Playground。首批 v0.2 切片进一步加入运行时 evaluator 路由、可配置 HTTP 风险策略，以及可复用的 Spring AI 2.0 `ToolCallback` 适配器；Spring Boot 自动配置与分布式适配器仍属于后续范围。
+**v0.1 可信执行闭环**已经实现，包括：通用调用模型、Java 策略、动态 SQL 风险评估、审批指纹与过期控制、内存幂等、只追加审计时间线，以及本地 Playground。首批 v0.2 切片进一步加入运行时 evaluator 路由、可配置 HTTP 风险策略、可复用的 Spring AI 2.0 `ToolCallback` 适配器，以及最小 Spring Boot 自动配置；分布式适配器仍属于后续范围。
 
 ## 为什么需要这个项目
 
@@ -23,6 +23,8 @@ agent-permit-execution    受保护的执行管线与幂等控制
 agent-permit-approval     审批生命周期与调用参数指纹
 agent-permit-audit        只追加审计事件
 agent-permit-spring-ai    可复用 Spring AI ToolCallback 适配器
+agent-permit-spring-boot-autoconfigure  安全的回调自动配置
+agent-permit-spring-boot-starter        Spring Boot starter 依赖入口
 agent-permit-playground   Developer Workspace Agent 演示
 ```
 
@@ -67,7 +69,23 @@ ToolCallback callback = new GuardedToolCallback(definition, pipeline, contract);
 
 模型提供的扁平 JSON 参数会映射成 `ToolInvocation`。主体、租户、环境、可选审批号和必填幂等键只从 `SpringAiToolContextKeys` 指定的可信 `ToolContext` 项获取；模型参数中的同名字段会被丢弃。所有外部副作用仍只能在注入的管线内发生。
 
-成功执行后，回调返回 `{"outcome":"...","reasonCode":"...","output":"..."}`；未执行终态不会携带 `output`。结果型管线会为幂等重试缓存完全相同的字符串输出，但审计事件仍只保存决策元数据。适配器不负责 Bean 扫描、属性绑定、身份解析或自动配置；在后续 Spring Boot starter 切片完成前，这些仍由应用显式装配。验收测试已覆盖公开构造、可信映射、低风险结果、审批后恢复、SSRF 拒绝、上下文非法、失败隔离和幂等重试。
+成功执行后，回调返回 `{"outcome":"...","reasonCode":"...","output":"..."}`；未执行终态不会携带 `output`。结果型管线会为幂等重试缓存完全相同的字符串输出，但审计事件仍只保存决策元数据。适配器本身不负责 Bean 扫描、属性绑定、身份解析或自动配置。验收测试已覆盖公开构造、可信映射、低风险结果、审批后恢复、SSRF 拒绝、上下文非法、失败隔离和幂等重试。
+
+## Spring Boot starter
+
+Spring Boot 4 应用可以直接依赖 starter：
+
+```xml
+<dependency>
+  <groupId>io.github.mat973252</groupId>
+  <artifactId>agent-permit-spring-boot-starter</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+</dependency>
+```
+
+应用必须各提供一个 `ToolDefinition`、`SpringAiToolContract` 和已经完整配置的 `ResultDecisionPipeline`，自动配置才会创建一个 `GuardedToolCallback`。任一输入缺失时不会装配；应用已经提供该回调时也会退让；同类型输入存在歧义时，由 Spring 按正常注入规则明确失败，不会静默挑选。
+
+starter 不会猜测策略、执行器、审批服务、身份、租户信息，也不会提供默认放行配置。这些安全敏感依赖仍必须由应用显式声明。
 
 ## 运行 Playground
 
@@ -122,9 +140,9 @@ Linux/macOS：
 - 当前幂等和审计实现是单进程内存适配器，不提供跨进程 exactly-once 保证；
 - Playground 使用真实决策管线，但副作用端口是内存计数器；
 - 当前内置动态规则覆盖 SQL、受保护文件路径、HTTP／SSRF 和部署场景；
-- Spring AI 适配器已经可复用，但当前仍需应用显式装配 pipeline、tool contract 和可信 context；
+- Spring AI 适配器已经可复用；starter 只负责从应用显式提供的 definition、pipeline 和 tool contract 装配回调，可信 context 仍由调用方提供；
 - 结果输出按字符串处理并由进程内幂等组件缓存，不会写入审计事件；
-- 持久化存储、分布式协调和可复用 Spring starter 属于后续版本。
+- 持久化存储和分布式协调属于后续版本。
 
 ## 许可证
 
