@@ -80,6 +80,16 @@ Path matching is a deterministic, filesystem-free lexical check. It treats slash
 
 For `HIGH` and `CRITICAL` risk, `DecisionPipeline.process(invocation, approvalRequestId)` executes only after a valid approval. Missing or invalid approval returns `APPROVAL_REQUIRED` with zero executions. The original `process(invocation)` behavior remains compatible and never implicitly grants approval. Approval consumption is not yet implemented; retry deduplication is defined below.
 
+## JDBC approval adapter
+
+`agent-permit-jdbc` provides `JdbcApprovalService`, a framework-neutral implementation of the existing `ApprovalVerifier`. Its production dependencies point only to core and approval; `DataSource`, `Clock`, request ID generation, and `InvocationFingerprinter` are explicit constructor inputs. The Spring Boot starter does not discover a database or create this service implicitly.
+
+The bundled schema stores only the request ID, lowercase fingerprint digest, expiry as UTC epoch milliseconds, and numeric approval state. Expiry is rounded down to millisecond precision when the request is created. It does not persist canonical fingerprint bytes, normalized arguments, principal attributes, approval secrets, or database exception text. Applications apply the schema explicitly with their migration system; the adapter performs no implicit DDL.
+
+Request creation uses a parameterized insert. Because its return type is `ApprovalRequest` rather than a decision, a write failure throws a generic `IllegalStateException` without the driver exception as its cause. Approval uses a conditional update that succeeds only for an existing pending request before its expiry, making concurrent approval idempotent across service instances. Verification reloads the record, checks the injected application clock with the same `now >= expiresAt` boundary as the in-memory service, then checks pending state and the complete invocation fingerprint. Approval and verification connection, SQL, missing-schema, and corrupt-state failures deny with the stable `APPROVAL_STORAGE_UNAVAILABLE` reason instead of granting approval or exposing driver details.
+
+This adapter persists verification state but deliberately does not add one-time approval consumption. The current pipeline verifies approval before claiming idempotency; consuming there would reject a legitimate same-key cached retry, while allowing re-consumption is unsafe across process restart until idempotency is also persistent. Consumption and cross-process execution deduplication therefore remain one joint Redis-idempotency design boundary.
+
 ## In-memory idempotency
 
 `DecisionPipeline.process(invocation, approvalRequestId, idempotencyKey)` applies idempotency after normalization, authorization, and any required approval, immediately before the executor. The key is transport metadata and is deliberately excluded from `ToolInvocation` and approval fingerprints. Existing overloads remain compatible and execute without idempotency; callers that require retry protection must provide a stable non-blank key.
@@ -126,6 +136,6 @@ The convenience modules define no policies, executors, approval services, identi
 
 The Maven `verify` phase runs the CLI after tests. The printed side-effect count comes from the injected mock `ToolExecutor`, while decisions, reasons, approval checks, idempotency, and timeline stages come from the production modules. No output is precomputed and no external system is contacted.
 
-## First implementation boundary
+## Implementation boundary
 
-The first vertical slice uses Java policies and in-memory stores. It proves semantics before adding Spring Boot convenience modules or distributed adapters.
+The first vertical slice used Java policies and in-memory stores to prove semantics. P1 adds framework and storage adapters without moving framework, JDBC, or configuration types into core.

@@ -10,7 +10,7 @@ AgentPermit4j sits between an AI model and external systems. It enforces authori
 
 ## Project status
 
-The **v0.1 trusted execution loop** is implemented: generic invocation modeling, Java policies, dynamic SQL risk, approval fingerprinting and expiry, in-memory idempotency, append-only audit timelines, and a local Playground. The first v0.2 slices add runtime evaluator routing, configurable HTTP risk policies, a reusable Spring AI 2.0 `ToolCallback` adapter, and minimal Spring Boot auto-configuration. Distributed adapters remain future work.
+The **v0.1 trusted execution loop** is implemented: generic invocation modeling, Java policies, dynamic SQL risk, approval fingerprinting and expiry, in-memory idempotency, append-only audit timelines, and a local Playground. The first v0.2 slices add runtime evaluator routing, configurable HTTP risk policies, a reusable Spring AI 2.0 `ToolCallback` adapter, minimal Spring Boot auto-configuration, and JDBC-backed approval requests. JDBC audit and Redis idempotency adapters remain future work.
 
 ## Why this project
 
@@ -24,6 +24,7 @@ agent-permit-policy       policy and dynamic risk evaluation SPI
 agent-permit-execution    guarded execution pipeline and idempotency
 agent-permit-approval     approval lifecycle and argument fingerprinting
 agent-permit-audit        append-only audit events
+agent-permit-jdbc         framework-neutral JDBC storage adapters
 agent-permit-spring-ai    reusable Spring AI ToolCallback adapter
 agent-permit-spring-boot-autoconfigure  safe callback auto-configuration
 agent-permit-spring-boot-starter        Spring Boot starter dependency
@@ -81,6 +82,25 @@ Spring Boot 4 applications can depend on the convenience starter:
 The application must provide exactly one `ToolDefinition`, `SpringAiToolContract`, and fully configured `ResultDecisionPipeline`. The auto-configuration then creates one `GuardedToolCallback`. It backs off when any input is missing or when the application already provides that callback. Ambiguous inputs fail normal Spring injection instead of choosing silently.
 
 The starter does not invent policies, executors, approval services, identity, tenant data, or permissive defaults. These security-sensitive dependencies remain explicit application beans.
+
+## JDBC approval storage
+
+`agent-permit-jdbc` persists approval request IDs, normalized invocation fingerprints, expiry timestamps, and approval state through a caller-provided `DataSource`:
+
+```java
+var approvals =
+    new JdbcApprovalService(
+        dataSource,
+        Clock.systemUTC(),
+        () -> UUID.randomUUID().toString(),
+        new InvocationFingerprinter());
+```
+
+Apply the bundled `io/github/mat973252/agentpermit/jdbc/approval-schema.sql` with the application's migration tool before constructing the service. The adapter never creates or changes production tables implicitly. H2 is used only for offline acceptance tests and is not a production dependency.
+
+The JDBC service implements the existing `ApprovalVerifier`, preserves the in-memory reason codes, binds approval to the same versioned fingerprint, and treats storage failures as `APPROVAL_STORAGE_UNAVAILABLE`. Concurrent approval uses a conditional update, so one caller receives `APPROVAL_APPROVED` and later callers receive the idempotent `APPROVAL_ALREADY_APPROVED`.
+
+This slice persists approval state only. It does not yet consume an approval once or provide cross-process side-effect deduplication; that ordering must be designed together with the Redis idempotency adapter so legitimate cached retries are not rejected before reaching idempotency.
 
 ## Run the Playground
 

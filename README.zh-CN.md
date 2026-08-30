@@ -8,7 +8,7 @@ AgentPermit4j 位于 AI 模型与外部系统之间，为每次工具调用强�
 
 ## 项目状态
 
-**v0.1 可信执行闭环**已经实现，包括：通用调用模型、Java 策略、动态 SQL 风险评估、审批指纹与过期控制、内存幂等、只追加审计时间线，以及本地 Playground。首批 v0.2 切片进一步加入运行时 evaluator 路由、可配置 HTTP 风险策略、可复用的 Spring AI 2.0 `ToolCallback` 适配器，以及最小 Spring Boot 自动配置；分布式适配器仍属于后续范围。
+**v0.1 可信执行闭环**已经实现，包括：通用调用模型、Java 策略、动态 SQL 风险评估、审批指纹与过期控制、内存幂等、只追加审计时间线，以及本地 Playground。首批 v0.2 切片进一步加入运行时 evaluator 路由、可配置 HTTP 风险策略、可复用的 Spring AI 2.0 `ToolCallback` 适配器、最小 Spring Boot 自动配置，以及 JDBC 审批请求存储；JDBC 审计与 Redis 幂等适配器仍属于后续范围。
 
 ## 为什么需要这个项目
 
@@ -22,6 +22,7 @@ agent-permit-policy       策略和动态风险评估 SPI
 agent-permit-execution    受保护的执行管线与幂等控制
 agent-permit-approval     审批生命周期与调用参数指纹
 agent-permit-audit        只追加审计事件
+agent-permit-jdbc         框架无关的 JDBC 存储适配器
 agent-permit-spring-ai    可复用 Spring AI ToolCallback 适配器
 agent-permit-spring-boot-autoconfigure  安全的回调自动配置
 agent-permit-spring-boot-starter        Spring Boot starter 依赖入口
@@ -87,6 +88,25 @@ Spring Boot 4 应用可以直接依赖 starter：
 
 starter 不会猜测策略、执行器、审批服务、身份、租户信息，也不会提供默认放行配置。这些安全敏感依赖仍必须由应用显式声明。
 
+## JDBC 审批存储
+
+`agent-permit-jdbc` 通过应用提供的 `DataSource` 持久化审批请求 ID、规范化调用指纹、过期时间和审批状态：
+
+```java
+var approvals =
+    new JdbcApprovalService(
+        dataSource,
+        Clock.systemUTC(),
+        () -> UUID.randomUUID().toString(),
+        new InvocationFingerprinter());
+```
+
+构造服务前，应用需要通过自己的迁移工具执行随包提供的 `io/github/mat973252/agentpermit/jdbc/approval-schema.sql`。适配器不会在启动时偷偷创建或修改生产表。H2 只用于离线验收测试，不是生产依赖。
+
+JDBC 服务实现现有 `ApprovalVerifier`，保持与内存实现一致的稳定原因码，并继续使用相同的版本化调用指纹。存储异常统一 fail-closed 为 `APPROVAL_STORAGE_UNAVAILABLE`。并发批准采用条件更新，因此只有一个调用方得到 `APPROVAL_APPROVED`，其余调用方得到幂等的 `APPROVAL_ALREADY_APPROVED`。
+
+本切片只持久化审批状态，尚未实现审批一次性消费或跨进程副作用去重。这两项必须与 Redis 幂等适配器一起设计，避免合法缓存重试在到达幂等层之前就被审批阶段拒绝。
+
 ## 运行 Playground
 
 要求：Java 21。无需全局安装 Maven，仓库已包含 Maven Wrapper。
@@ -141,8 +161,9 @@ Linux/macOS：
 - Playground 使用真实决策管线，但副作用端口是内存计数器；
 - 当前内置动态规则覆盖 SQL、受保护文件路径、HTTP／SSRF 和部署场景；
 - Spring AI 适配器已经可复用；starter 只负责从应用显式提供的 definition、pipeline 和 tool contract 装配回调，可信 context 仍由调用方提供；
+- JDBC 审批请求已经持久化，但 JDBC 审计、Redis 幂等和审批一次性消费尚未完成；
 - 结果输出按字符串处理并由进程内幂等组件缓存，不会写入审计事件；
-- 持久化存储和分布式协调属于后续版本。
+- 完整持久化存储和分布式协调属于后续版本。
 
 ## 许可证
 

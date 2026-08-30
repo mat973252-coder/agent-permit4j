@@ -16,6 +16,7 @@
   <properties>
     <jsqlparser.version>5.3</jsqlparser.version>
     <junit.version>5.13.4</junit.version>
+    <h2.version>2.4.240</h2.version>
     <spring-ai.version>2.0.1</spring-ai.version>
     <spring-boot.version>4.0.8</spring-boot.version>
     <maven.compiler.release>21</maven.compiler.release>
@@ -29,6 +30,7 @@
     <module>agent-permit-execution</module>
     <module>agent-permit-approval</module>
     <module>agent-permit-audit</module>
+    <module>agent-permit-jdbc</module>
     <module>agent-permit-spring-ai</module>
     <module>agent-permit-spring-boot-autoconfigure</module>
     <module>agent-permit-spring-boot-starter</module>
