@@ -36,7 +36,7 @@ The backlog is ordered by proof of value. Each item includes an observable accep
 - [x] Add Spring Boot auto-configuration and starter modules only after the core API stabilizes.
 - [ ] Add JDBC approval/audit storage and Redis idempotency adapters.
   - [x] Add JDBC approval request storage with persisted fingerprint and expiry verification.
-  - [ ] Add append-only JDBC audit timeline storage.
+  - [x] Add append-only JDBC audit timeline storage.
   - [ ] Add Redis result idempotency with cross-process concurrency acceptance tests.
 - [ ] Add messaging and HTTP mock tools with external-domain, SSRF, method, and payload policies.
   - [x] Add runtime evaluator routing plus configurable HTTP host, SSRF, method, and payload policies with Playground cases.

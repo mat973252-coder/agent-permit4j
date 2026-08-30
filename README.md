@@ -10,7 +10,7 @@ AgentPermit4j sits between an AI model and external systems. It enforces authori
 
 ## Project status
 
-The **v0.1 trusted execution loop** is implemented: generic invocation modeling, Java policies, dynamic SQL risk, approval fingerprinting and expiry, in-memory idempotency, append-only audit timelines, and a local Playground. The first v0.2 slices add runtime evaluator routing, configurable HTTP risk policies, a reusable Spring AI 2.0 `ToolCallback` adapter, minimal Spring Boot auto-configuration, and JDBC-backed approval requests. JDBC audit and Redis idempotency adapters remain future work.
+The **v0.1 trusted execution loop** is implemented: generic invocation modeling, Java policies, dynamic SQL risk, approval fingerprinting and expiry, in-memory idempotency, append-only audit timelines, and a local Playground. The first v0.2 slices add runtime evaluator routing, configurable HTTP risk policies, a reusable Spring AI 2.0 `ToolCallback` adapter, minimal Spring Boot auto-configuration, JDBC-backed approval requests, and append-only JDBC audit timelines. Redis idempotency remains future work.
 
 ## Why this project
 
@@ -101,6 +101,19 @@ Apply the bundled `io/github/mat973252/agentpermit/jdbc/approval-schema.sql` wit
 The JDBC service implements the existing `ApprovalVerifier`, preserves the in-memory reason codes, binds approval to the same versioned fingerprint, and treats storage failures as `APPROVAL_STORAGE_UNAVAILABLE`. Concurrent approval uses a conditional update, so one caller receives `APPROVAL_APPROVED` and later callers receive the idempotent `APPROVAL_ALREADY_APPROVED`.
 
 This slice persists approval state only. It does not yet consume an approval once or provide cross-process side-effect deduplication; that ordering must be designed together with the Redis idempotency adapter so legitimate cached retries are not rejected before reaching idempotency.
+
+## JDBC audit timeline
+
+`JdbcAuditLog` implements the existing `AuditSink` and persists the safe audit fields through an application-provided `DataSource`:
+
+```java
+var auditLog =
+    new JdbcAuditLog(dataSource, () -> UUID.randomUUID().toString());
+```
+
+Apply `io/github/mat973252/agentpermit/jdbc/audit-schema.sql` with the application's migration tool first. The adapter performs no implicit DDL. `InvocationAuditTrail` remains the only sequence source for pipeline timelines; JDBC stores the supplied sequence verbatim. The composite primary key `(timeline_id, event_sequence)` rejects duplicate appends, and `replaySafeView` returns an immutable sequence-ordered view.
+
+The table contains only the timeline ID, sequence, stage, tool, principal, tenant, status, stable reason code, and terminal outcome. Raw arguments, tool output, approval IDs, idempotency keys, fingerprints, and exception text are never written. Synchronous storage failures throw the generic `IllegalStateException("audit storage unavailable")` instead of silently losing an event or exposing driver details. If an audit write fails after an external side effect, the error still propagates; preventing a retry from repeating that effect requires the planned persistent idempotency adapter.
 
 ## Run the Playground
 

@@ -106,7 +106,15 @@ This guarantee is scoped to one guard instance in one process. Entries are not p
 
 An approved high-risk path records `POLICY → RISK → APPROVAL → EXECUTION → RESULT`. A low-risk path records approval as `NOT_REQUIRED`; an early denial records only stages that actually occurred plus `RESULT`. The existing functional `AuditSink.record(DecisionAuditEvent)` contract remains compatible: legacy sinks receive the terminal result, while timeline-aware sinks override the stage-event method.
 
-`replaySafeView(timelineId)` filters and orders already-recorded events into an immutable `ReplaySafeAuditView`. It does not receive or invoke a pipeline, policy, approval service, idempotency guard, or executor, so viewing the timeline cannot repeat a side effect. The current log is process-local and non-persistent; JDBC storage, retention, signatures, and cross-process transport remain outside P0.
+`replaySafeView(timelineId)` filters and orders already-recorded events into an immutable `ReplaySafeAuditView`. It does not receive or invoke a pipeline, policy, approval service, idempotency guard, or executor, so viewing the timeline cannot repeat a side effect. The in-memory implementation remains process-local; retention, signatures, and cross-process transport remain outside the current scope.
+
+## JDBC audit adapter
+
+`agent-permit-jdbc` provides `JdbcAuditLog`, a framework-neutral implementation of `AuditSink`. Its production dependencies point only to core and audit, and both `DataSource` and legacy timeline ID generation are explicit constructor inputs. Applications apply the bundled schema with their migration system; the adapter performs no implicit DDL.
+
+The schema persists exactly the safe fields exposed by `AuditEvent`: timeline ID, caller-assigned sequence, stage, tool, principal, tenant, status, stable reason code, and optional terminal outcome. It does not persist raw arguments, tool output, approval IDs, idempotency keys, fingerprints, exception messages, or canonical invocation bytes. Pipeline sequence allocation remains exclusively owned by `InvocationAuditTrail`; the JDBC adapter does not introduce a second counter. Its `(timeline_id, event_sequence)` primary key rejects a duplicate append instead of overwriting an event, and replay selects one timeline ordered by sequence before constructing an immutable `ReplaySafeAuditView`.
+
+Writes are synchronous and append-only; the adapter exposes no update or delete API. SQL failures and corrupt stored events become a generic `IllegalStateException("audit storage unavailable")` without driver details. The pipeline does not silently swallow that failure. Because an `EXECUTION` audit write can occur after an external side effect, audit persistence alone does not make retries exactly once; cross-process retry safety remains the responsibility of the planned persistent idempotency boundary.
 
 ## Spring AI adapter
 

@@ -8,7 +8,7 @@ AgentPermit4j 位于 AI 模型与外部系统之间，为每次工具调用强�
 
 ## 项目状态
 
-**v0.1 可信执行闭环**已经实现，包括：通用调用模型、Java 策略、动态 SQL 风险评估、审批指纹与过期控制、内存幂等、只追加审计时间线，以及本地 Playground。首批 v0.2 切片进一步加入运行时 evaluator 路由、可配置 HTTP 风险策略、可复用的 Spring AI 2.0 `ToolCallback` 适配器、最小 Spring Boot 自动配置，以及 JDBC 审批请求存储；JDBC 审计与 Redis 幂等适配器仍属于后续范围。
+**v0.1 可信执行闭环**已经实现，包括：通用调用模型、Java 策略、动态 SQL 风险评估、审批指纹与过期控制、内存幂等、只追加审计时间线，以及本地 Playground。首批 v0.2 切片进一步加入运行时 evaluator 路由、可配置 HTTP 风险策略、可复用的 Spring AI 2.0 `ToolCallback` 适配器、最小 Spring Boot 自动配置、JDBC 审批请求存储，以及只追加 JDBC 审计时间线；Redis 幂等适配器仍属于后续范围。
 
 ## 为什么需要这个项目
 
@@ -107,6 +107,19 @@ JDBC 服务实现现有 `ApprovalVerifier`，保持与内存实现一致的稳�
 
 本切片只持久化审批状态，尚未实现审批一次性消费或跨进程副作用去重。这两项必须与 Redis 幂等适配器一起设计，避免合法缓存重试在到达幂等层之前就被审批阶段拒绝。
 
+## JDBC 审计时间线
+
+`JdbcAuditLog` 实现现有 `AuditSink`，通过应用提供的 `DataSource` 持久化安全审计字段：
+
+```java
+var auditLog =
+    new JdbcAuditLog(dataSource, () -> UUID.randomUUID().toString());
+```
+
+使用前，应用需要通过自己的迁移工具执行 `io/github/mat973252/agentpermit/jdbc/audit-schema.sql`；适配器不会隐式建表。管线时间线的序列号仍只由 `InvocationAuditTrail` 分配，JDBC 原样保存传入序列。联合主键 `(timeline_id, event_sequence)` 会拒绝重复追加，`replaySafeView` 则返回按序列排列的不可变视图。
+
+表中只包含时间线 ID、序列、阶段、工具、主体、租户、状态、稳定原因码和终态结果；原始参数、工具输出、审批号、幂等键、指纹和异常文本均不会入库。同步存储失败会抛出通用的 `IllegalStateException("audit storage unavailable")`，既不静默丢事件，也不暴露驱动细节。若外部副作用完成后审计写入失败，错误仍会向上传播；防止随后的重试重复执行副作用，仍需要计划中的持久化幂等适配器。
+
 ## 运行 Playground
 
 要求：Java 21。无需全局安装 Maven，仓库已包含 Maven Wrapper。
@@ -157,11 +170,11 @@ Linux/macOS：
 
 ## 安全边界
 
-- 当前幂等和审计实现是单进程内存适配器，不提供跨进程 exactly-once 保证；
+- 当前幂等实现仍是单进程内存适配器；JDBC 审计可跨进程持久化事件，但本身不提供副作用 exactly-once 保证；
 - Playground 使用真实决策管线，但副作用端口是内存计数器；
 - 当前内置动态规则覆盖 SQL、受保护文件路径、HTTP／SSRF 和部署场景；
 - Spring AI 适配器已经可复用；starter 只负责从应用显式提供的 definition、pipeline 和 tool contract 装配回调，可信 context 仍由调用方提供；
-- JDBC 审批请求已经持久化，但 JDBC 审计、Redis 幂等和审批一次性消费尚未完成；
+- JDBC 审批请求和只追加审计时间线已经持久化，但 Redis 幂等和审批一次性消费尚未完成；
 - 结果输出按字符串处理并由进程内幂等组件缓存，不会写入审计事件；
 - 完整持久化存储和分布式协调属于后续版本。
 
