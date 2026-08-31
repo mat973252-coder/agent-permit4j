@@ -34,10 +34,10 @@ The backlog is ordered by proof of value. Each item includes an observable accep
   - [x] Add a separate result-bearing execution contract that returns idempotent tool output without adding it to audit decisions.
   - [x] Extract a reusable adapter after result-bearing execution semantics stabilize.
 - [x] Add Spring Boot auto-configuration and starter modules only after the core API stabilizes.
-- [ ] Add JDBC approval/audit storage and Redis idempotency adapters.
+- [x] Add JDBC approval/audit storage and Redis idempotency adapters.
   - [x] Add JDBC approval request storage with persisted fingerprint and expiry verification.
   - [x] Add append-only JDBC audit timeline storage.
-  - [ ] Add Redis result idempotency with cross-process concurrency acceptance tests.
+  - [x] Add Redis result idempotency with cross-process concurrency acceptance tests.
 - [ ] Add messaging and HTTP mock tools with external-domain, SSRF, method, and payload policies.
   - [x] Add runtime evaluator routing plus configurable HTTP host, SSRF, method, and payload policies with Playground cases.
   - [ ] Add messaging mock tools and destination/content policies.

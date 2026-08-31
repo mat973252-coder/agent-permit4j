@@ -66,7 +66,7 @@ final class DecisionPreflight {
     return switch (risk.level()) {
       case LOW -> {
         audit.stage(AuditStage.APPROVAL, "NOT_REQUIRED", "APPROVAL_NOT_REQUIRED");
-        yield Result.execute(new Execution(audit, invocation, risk.reasonCode()));
+        yield Result.execute(new Execution(audit, invocation, risk.reasonCode(), null));
       }
       case HIGH, CRITICAL -> requireApproval(audit, invocation, risk, approvalRequestId);
       case DENY -> terminal(audit, DecisionOutcome.DENIED, risk.reasonCode());
@@ -90,7 +90,8 @@ final class DecisionPreflight {
         approval.permitted() ? "VERIFIED" : "REJECTED",
         approval.reasonCode());
     return approval.permitted()
-        ? Result.execute(new Execution(audit, invocation, risk.reasonCode()))
+        ? Result.execute(
+            new Execution(audit, invocation, risk.reasonCode(), approvalRequestId))
         : terminal(audit, DecisionOutcome.APPROVAL_REQUIRED, approval.reasonCode());
   }
 
@@ -102,7 +103,10 @@ final class DecisionPreflight {
   }
 
   record Execution(
-      InvocationAuditTrail audit, ToolInvocation invocation, String reasonCode) {}
+      InvocationAuditTrail audit,
+      ToolInvocation invocation,
+      String reasonCode,
+      String approvalRequestId) {}
 
   record Result(DecisionResult terminalDecision, Execution execution) {
 

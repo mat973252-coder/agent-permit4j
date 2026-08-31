@@ -43,13 +43,18 @@ public final class ResultDecisionPipeline {
     }
     var execution = result.execution();
     return execute(
-        execution.audit(), execution.invocation(), execution.reasonCode(), idempotencyKey);
+        execution.audit(),
+        execution.invocation(),
+        execution.reasonCode(),
+        execution.approvalRequestId(),
+        idempotencyKey);
   }
 
   private ToolExecutionResult execute(
       InvocationAuditTrail audit,
       ToolInvocation invocation,
       String reasonCode,
+      String approvalRequestId,
       String idempotencyKey) {
     var result =
         idempotencyKey == null
@@ -57,7 +62,10 @@ public final class ResultDecisionPipeline {
             : dependencies
                 .idempotencyGuard()
                 .executeOnce(
-                    idempotencyKey, invocation, () -> invokeExecutor(invocation, reasonCode));
+                    idempotencyKey,
+                    invocation,
+                    approvalRequestId,
+                    () -> invokeExecutor(invocation, reasonCode));
     var decision = result.decision();
     audit.stage(AuditStage.EXECUTION, decision.outcome().name(), decision.reasonCode());
     audit.result(decision);

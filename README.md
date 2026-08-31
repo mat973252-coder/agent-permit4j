@@ -10,7 +10,7 @@ AgentPermit4j sits between an AI model and external systems. It enforces authori
 
 ## Project status
 
-The **v0.1 trusted execution loop** is implemented: generic invocation modeling, Java policies, dynamic SQL risk, approval fingerprinting and expiry, in-memory idempotency, append-only audit timelines, and a local Playground. The first v0.2 slices add runtime evaluator routing, configurable HTTP risk policies, a reusable Spring AI 2.0 `ToolCallback` adapter, minimal Spring Boot auto-configuration, JDBC-backed approval requests, and append-only JDBC audit timelines. Redis idempotency remains future work.
+The **v0.1 trusted execution loop** is implemented: generic invocation modeling, Java policies, dynamic SQL risk, approval fingerprinting and expiry, in-memory idempotency, append-only audit timelines, and a local Playground. The first v0.2 slices add runtime evaluator routing, configurable HTTP risk policies, a reusable Spring AI 2.0 `ToolCallback` adapter, minimal Spring Boot auto-configuration, JDBC-backed approval requests, append-only JDBC audit timelines, and Redis-backed result idempotency with approval consumption.
 
 ## Why this project
 
@@ -25,13 +25,14 @@ agent-permit-execution    guarded execution pipeline and idempotency
 agent-permit-approval     approval lifecycle and argument fingerprinting
 agent-permit-audit        append-only audit events
 agent-permit-jdbc         framework-neutral JDBC storage adapters
+agent-permit-redis        framework-neutral Redis result idempotency
 agent-permit-spring-ai    reusable Spring AI ToolCallback adapter
 agent-permit-spring-boot-autoconfigure  safe callback auto-configuration
 agent-permit-spring-boot-starter        Spring Boot starter dependency
 agent-permit-playground   Developer Workspace Agent demo
 ```
 
-The first release targets Spring AI and local, reproducible demo adapters. OPA, distributed stores, chat approval providers, and other agent frameworks are later milestones.
+The first release targets Spring AI and reproducible adapters. OPA, additional distributed stores, chat approval providers, and other agent frameworks are later milestones.
 
 ## Demo story
 
@@ -100,7 +101,7 @@ Apply the bundled `io/github/mat973252/agentpermit/jdbc/approval-schema.sql` wit
 
 The JDBC service implements the existing `ApprovalVerifier`, preserves the in-memory reason codes, binds approval to the same versioned fingerprint, and treats storage failures as `APPROVAL_STORAGE_UNAVAILABLE`. Concurrent approval uses a conditional update, so one caller receives `APPROVAL_APPROVED` and later callers receive the idempotent `APPROVAL_ALREADY_APPROVED`.
 
-This slice persists approval state only. It does not yet consume an approval once or provide cross-process side-effect deduplication; that ordering must be designed together with the Redis idempotency adapter so legitimate cached retries are not rejected before reaching idempotency.
+JDBC remains the source of approval verification. For result-bearing calls that also provide a stable idempotency key, the Redis guard described below atomically binds an approved request to that key immediately before execution. This keeps a legitimate same-key retry valid while rejecting a different key with `APPROVAL_ALREADY_CONSUMED`.
 
 ## JDBC audit timeline
 
@@ -113,7 +114,37 @@ var auditLog =
 
 Apply `io/github/mat973252/agentpermit/jdbc/audit-schema.sql` with the application's migration tool first. The adapter performs no implicit DDL. `InvocationAuditTrail` remains the only sequence source for pipeline timelines; JDBC stores the supplied sequence verbatim. The composite primary key `(timeline_id, event_sequence)` rejects duplicate appends, and `replaySafeView` returns an immutable sequence-ordered view.
 
-The table contains only the timeline ID, sequence, stage, tool, principal, tenant, status, stable reason code, and terminal outcome. Raw arguments, tool output, approval IDs, idempotency keys, fingerprints, and exception text are never written. Synchronous storage failures throw the generic `IllegalStateException("audit storage unavailable")` instead of silently losing an event or exposing driver details. If an audit write fails after an external side effect, the error still propagates; preventing a retry from repeating that effect requires the planned persistent idempotency adapter.
+The table contains only the timeline ID, sequence, stage, tool, principal, tenant, status, stable reason code, and terminal outcome. Raw arguments, tool output, approval IDs, idempotency keys, fingerprints, and exception text are never written. Synchronous storage failures throw the generic `IllegalStateException("audit storage unavailable")` instead of silently losing an event or exposing driver details. If an audit write fails after an external side effect, the error still propagates; callers that need cross-process retry protection must supply the Redis result guard and a stable idempotency key.
+
+## Redis result idempotency
+
+`agent-permit-redis` provides a framework-neutral `ResultIdempotencyGuard` backed by a caller-owned Jedis client:
+
+```java
+var redisClient = RedisClient.create("redis://localhost:6379");
+var redisGuard =
+    new RedisResultIdempotencyGuard(
+        redisClient,
+        new RedisIdempotencyConfig(
+            "agent-permit:", Duration.ofSeconds(30), Duration.ofMillis(50)));
+```
+
+Inject `redisGuard` into the application's `ResultDecisionPipeline`. A Redis Lua script atomically binds the idempotency key to the complete normalized invocation fingerprint and elects one owner. Concurrent processes wait for the same terminal `ToolExecutionResult`; later retries reuse the exact cached output or failure. A key reused for another fingerprint fails with `IDEMPOTENCY_INVOCATION_MISMATCH`. Redis errors fail closed before an unclaimed side effect with `IDEMPOTENCY_STORAGE_UNAVAILABLE`.
+
+For an approved `HIGH` or `CRITICAL` result call, the same atomic claim also binds the approval request to the idempotency key and fingerprint. Repeating that pair is a retry; using the approval with another key returns `APPROVAL_ALREADY_CONSUMED`. A legacy or custom result guard that does not implement approval-aware coordination fails closed with `APPROVAL_CONSUMPTION_UNAVAILABLE`. Calls that bypass the idempotency-key pipeline overload do not receive this Redis consumption or cross-process deduplication. The Spring AI adapter already requires its key from trusted `ToolContext`.
+
+The owner lease detects an abandoned execution but never transfers execution rights. On expiry, the entry becomes the permanent `FAILED / IDEMPOTENCY_OWNER_LOST` terminal result, so automatic recovery cannot duplicate an uncertain side effect. There is no lease heartbeat; configure the lease above the longest expected tool execution time. Result and approval records have no TTL or delete API. Use a dedicated, access-controlled Redis deployment with persistence, appropriate high availability, and a `noeviction` policy: data loss, `FLUSHDB`, manual deletion, or eviction destroys the retry guarantee. Cached tool output is sensitive application data and must be protected accordingly.
+
+Raw idempotency and approval IDs are SHA-256 hashed in Redis key names. All adapter keys currently share the `{execution}` cluster hash slot so the multi-key approval claim stays atomic; this is an explicit single-slot scaling limit. The application owns and closes the Jedis client.
+
+The default build uses deterministic in-memory fakes. Run the opt-in real Redis acceptance suite against a disposable Redis instance with:
+
+```bash
+./mvnw -B -ntp -pl agent-permit-redis -am \
+  -Dtest=RedisResultIdempotencyGuardIT \
+  -Dsurefire.failIfNoSpecifiedTests=false \
+  -DagentPermitRedisUri=redis://localhost:6379 test
+```
 
 ## Run the Playground
 
