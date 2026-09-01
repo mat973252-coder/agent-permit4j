@@ -10,7 +10,7 @@ AgentPermit4j sits between an AI model and external systems. It enforces authori
 
 ## Project status
 
-The **v0.1 trusted execution loop** is implemented: generic invocation modeling, Java policies, dynamic SQL risk, approval fingerprinting and expiry, in-memory idempotency, append-only audit timelines, and a local Playground. The first v0.2 slices add runtime evaluator routing, configurable HTTP risk policies, a reusable Spring AI 2.0 `ToolCallback` adapter, minimal Spring Boot auto-configuration, JDBC-backed approval requests, append-only JDBC audit timelines, and Redis-backed result idempotency with approval consumption.
+The **v0.1 trusted execution loop** is implemented: generic invocation modeling, Java policies, dynamic SQL risk, approval fingerprinting and expiry, in-memory idempotency, append-only audit timelines, and a local Playground. The first v0.2 slices add runtime evaluator routing, configurable HTTP and messaging risk policies, a reusable Spring AI 2.0 `ToolCallback` adapter, minimal Spring Boot auto-configuration, JDBC-backed approval requests, append-only JDBC audit timelines, and Redis-backed result idempotency with approval consumption.
 
 ## Why this project
 
@@ -36,13 +36,13 @@ The first release targets Spring AI and reproducible adapters. OPA, additional d
 
 ## Demo story
 
-The Playground demonstrates a Developer Workspace Agent with file read/delete, SQL read/write, outbound HTTP, and staging/production deployment scenarios. Read-only operations run automatically; production or selective writes require exact approval; protected-resource deletion and SSRF targets are denied.
+The Playground demonstrates a Developer Workspace Agent with file read/delete, SQL read/write, outbound HTTP, messaging, and staging/production deployment scenarios. Read-only operations run automatically; production, selective writes, and message sends require exact backend approval; protected-resource deletion, SSRF targets, unlisted message destinations, and oversized content are denied.
 
 See [docs/demo-website.md](docs/demo-website.md) for the website flow and [TODO.md](TODO.md) for the executable roadmap.
 
-## Configure HTTP risk
+## Configure HTTP and messaging risk
 
-Applications provide evaluator and HTTP policy configuration at runtime:
+Applications provide evaluator and policy configuration at runtime:
 
 ```java
 var riskEvaluator =
@@ -51,10 +51,15 @@ var riskEvaluator =
             "sql", new SqlRiskEvaluator(),
             "http",
                 new HttpRiskEvaluator(
-                    new HttpRiskPolicy(Set.of("api.example.com"), 16 * 1024))));
+                    new HttpRiskPolicy(Set.of("api.example.com"), 16 * 1024)),
+            "messaging",
+                new MessagingRiskEvaluator(
+                    new MessagingRiskPolicy(Set.of("channel://ops"), 4 * 1024))));
 ```
 
 The registry and policy take immutable snapshots. A configuration system can build and atomically replace a new snapshot when configuration changes; AgentPermit4j does not watch YAML, environment variables, or a remote configuration service inside the reusable policy module.
+
+Messaging destinations are opaque exact identifiers. An allowed `message.send` with a non-blank `body` inside the UTF-8 limit is `HIGH` and requires real backend approval. Message text that claims approval does not change that result. Vendor-specific destination normalization, semantic moderation, and DLP remain application policy concerns.
 
 ## Spring AI adapter
 

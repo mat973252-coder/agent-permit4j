@@ -8,7 +8,7 @@ AgentPermit4j 位于 AI 模型与外部系统之间，为每次工具调用强�
 
 ## 项目状态
 
-**v0.1 可信执行闭环**已经实现，包括：通用调用模型、Java 策略、动态 SQL 风险评估、审批指纹与过期控制、内存幂等、只追加审计时间线，以及本地 Playground。首批 v0.2 切片进一步加入运行时 evaluator 路由、可配置 HTTP 风险策略、可复用的 Spring AI 2.0 `ToolCallback` 适配器、最小 Spring Boot 自动配置、JDBC 审批请求存储、只追加 JDBC 审计时间线，以及带审批消费的 Redis 结果幂等。
+**v0.1 可信执行闭环**已经实现，包括：通用调用模型、Java 策略、动态 SQL 风险评估、审批指纹与过期控制、内存幂等、只追加审计时间线，以及本地 Playground。首批 v0.2 切片进一步加入运行时 evaluator 路由、可配置 HTTP 与 messaging 风险策略、可复用的 Spring AI 2.0 `ToolCallback` 适配器、最小 Spring Boot 自动配置、JDBC 审批请求存储、只追加 JDBC 审计时间线，以及带审批消费的 Redis 结果幂等。
 
 ## 为什么需要这个项目
 
@@ -34,20 +34,21 @@ agent-permit-playground   Developer Workspace Agent 演示
 
 ## 演示场景
 
-Playground 模拟一个 Developer Workspace Agent，包含文件读取／删除、SQL 读取／写入、外部 HTTP/API 调用，以及 staging／production 部署场景：
+Playground 模拟一个 Developer Workspace Agent，包含文件读取／删除、SQL 读取／写入、外部 HTTP/API、消息发送，以及 staging／production 部署场景：
 
 - 只读操作自动执行；
 - production 部署和选择性写入必须获得与当前调用精确绑定的审批；
 - 删除受保护资源会被拒绝；
 - 非允许域名、SSRF 目标和不安全 HTTP 请求会被拒绝；
+- 未允许的消息目的地和超限正文会被拒绝；消息正文声称“已经审批”也不能替代后端审批；
 - 同一幂等键的并发调用只产生一次 mock 副作用；
 - 每次调用都会生成可安全回放的审计时间线。
 
 网站流程参见 [docs/demo-website.md](docs/demo-website.md)，可执行路线图参见 [TODO.md](TODO.md)。
 
-## 配置 HTTP 风险策略
+## 配置 HTTP 与 messaging 风险策略
 
-应用可以在运行时提供 evaluator 和 HTTP 策略配置：
+应用可以在运行时提供 evaluator 和策略配置：
 
 ```java
 var riskEvaluator =
@@ -56,10 +57,15 @@ var riskEvaluator =
             "sql", new SqlRiskEvaluator(),
             "http",
                 new HttpRiskEvaluator(
-                    new HttpRiskPolicy(Set.of("api.example.com"), 16 * 1024))));
+                    new HttpRiskPolicy(Set.of("api.example.com"), 16 * 1024)),
+            "messaging",
+                new MessagingRiskEvaluator(
+                    new MessagingRiskPolicy(Set.of("channel://ops"), 4 * 1024))));
 ```
 
 注册表和策略都会保存不可变快照。配置发生变化时，应用层可以构造并原子替换新快照；可复用 policy 模块本身不会监听 YAML、环境变量或远程配置中心。
+
+消息目的地使用不透明的精确标识符匹配。允许的 `message.send` 还必须提供非空 `body` 且不超过 UTF-8 字节上限，随后统一判定为 `HIGH` 并等待真实后端审批。正文中声称“已经审批”不会改变结果；供应商专用的目的地规范化、语义审核和 DLP 由应用策略负责。
 
 ## Spring AI 适配器
 

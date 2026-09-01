@@ -9,6 +9,7 @@ public final class PlaygroundRunner {
         new FileScenario().run(),
         new SqlScenario().run(),
         new HttpScenario().run(),
+        new MessagingScenario().run(),
         new DeploymentScenario().run());
   }
 }

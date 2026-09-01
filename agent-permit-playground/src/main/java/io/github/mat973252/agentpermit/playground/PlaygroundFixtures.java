@@ -78,6 +78,19 @@ final class PlaygroundFixtures {
         arguments);
   }
 
+  static ToolInvocation messaging(String destination, String body) {
+    return invocation(
+        new ToolDescriptor(
+            "message.send",
+            ToolEffect.WRITE,
+            Reversibility.IRREVERSIBLE,
+            DataSensitivity.CONFIDENTIAL),
+        new Action("message.send"),
+        new Resource("messaging", destination, Map.of()),
+        "local",
+        Map.of("body", body));
+  }
+
   static InMemoryApprovalService approvals(String requestId) {
     return new InMemoryApprovalService(
         Clock.fixed(Instant.parse("2026-08-26T00:00:00Z"), ZoneOffset.UTC),

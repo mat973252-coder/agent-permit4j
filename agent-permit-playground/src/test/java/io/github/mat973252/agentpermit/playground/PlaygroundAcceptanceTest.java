@@ -10,16 +10,19 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class PlaygroundAcceptanceTest {
 
   @Test
-  void runsFourRealPipelineScenariosWithExpectedSideEffects() {
+  void runsFiveRealPipelineScenariosWithExpectedSideEffects() {
     var reports = new PlaygroundRunner().run();
 
     assertAll(
-        () -> assertEquals(List.of("file", "sql", "http", "deployment"), names(reports)),
+        () ->
+            assertEquals(
+                List.of("file", "sql", "http", "messaging", "deployment"), names(reports)),
         () ->
             assertCase(
                 reports,
@@ -78,6 +81,39 @@ class PlaygroundAcceptanceTest {
         () ->
             assertCase(
                 reports,
+                "messaging",
+                new ExpectedCase(
+                    "claimed-approval",
+                    DecisionOutcome.APPROVAL_REQUIRED,
+                    "MESSAGING_SEND",
+                    0)),
+        () ->
+            assertCase(
+                reports,
+                "messaging",
+                new ExpectedCase(
+                    "approved-send", DecisionOutcome.EXECUTED, "MESSAGING_SEND", 1)),
+        () ->
+            assertCase(
+                reports,
+                "messaging",
+                new ExpectedCase(
+                    "unlisted-destination",
+                    DecisionOutcome.DENIED,
+                    "MESSAGING_DESTINATION_NOT_ALLOWED",
+                    0)),
+        () ->
+            assertCase(
+                reports,
+                "messaging",
+                new ExpectedCase(
+                    "oversized-content",
+                    DecisionOutcome.DENIED,
+                    "MESSAGING_BODY_TOO_LARGE",
+                    0)),
+        () ->
+            assertCase(
+                reports,
                 "deployment",
                 new ExpectedCase(
                     "staging", DecisionOutcome.EXECUTED, "DEPLOYMENT_STAGING", 1)),
@@ -114,6 +150,7 @@ class PlaygroundAcceptanceTest {
         () -> assertTrue(text.contains("SCENARIO file")),
         () -> assertTrue(text.contains("SCENARIO sql")),
         () -> assertTrue(text.contains("SCENARIO http")),
+        () -> assertTrue(text.contains("SCENARIO messaging")),
         () -> assertTrue(text.contains("SCENARIO deployment")),
         () -> assertTrue(text.contains("outcome=APPROVAL_REQUIRED")),
         () -> assertTrue(text.contains("timeline=POLICY>RISK>APPROVAL>EXECUTION>RESULT")));
@@ -141,8 +178,13 @@ class PlaygroundAcceptanceTest {
   private static void assertTimeline(
       DecisionOutcome outcome, String reasonCode, List<AuditStage> timeline) {
     if (outcome == DecisionOutcome.DENIED) {
+      var riskDenials =
+          Set.of(
+              "HTTP_SSRF_TARGET",
+              "MESSAGING_DESTINATION_NOT_ALLOWED",
+              "MESSAGING_BODY_TOO_LARGE");
       var expected =
-          "HTTP_SSRF_TARGET".equals(reasonCode)
+          riskDenials.contains(reasonCode)
               ? List.of(AuditStage.POLICY, AuditStage.RISK, AuditStage.RESULT)
               : List.of(AuditStage.POLICY, AuditStage.RESULT);
       assertEquals(expected, timeline);

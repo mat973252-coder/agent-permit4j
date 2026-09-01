@@ -56,6 +56,10 @@ An update with a predicate is classified as `HIGH`, while a missing predicate or
 
 The HTTP evaluator is deterministic and does not perform DNS resolution. Exact host allowlisting reduces the target surface, but a real HTTP executor must still resolve the host and reject private, loopback, link-local, and other forbidden addresses immediately before connecting to protect against DNS rebinding and time-of-check/time-of-use changes.
 
+`MessagingRiskEvaluator` evaluates `message.send` invocations whose resource type is `messaging`, resource identifier is the destination, and scalar `body` argument is the message content. `MessagingRiskPolicy` takes an immutable snapshot of exact allowed destination identifiers and a maximum UTF-8 body size. A missing or blank body, oversized body, unlisted destination, different action, or disguised resource type is denied with a stable reason code. An allowed send is always `HIGH` and therefore requires backend approval before the mock or real executor runs.
+
+Destination identifiers are opaque and matched exactly; the reusable policy does not guess vendor-specific Slack, Feishu, webhook, channel, or tenant normalization rules. Text inside the body cannot grant approval, even when it claims that an administrator approved the send. Semantic moderation, DLP, and tenant-specific destination ownership remain application authorizer responsibilities rather than a brittle keyword blacklist.
+
 ## Deterministic decision pipeline
 
 `agent-permit-execution` owns the fixed orchestration order: validate, normalize, authorize, assess risk, then select one terminal path. Validation and authorization failures stop immediately. `LOW` risk executes once, `HIGH` and `CRITICAL` return `APPROVAL_REQUIRED` without execution, and `DENY` remains denied. An executor exception is converted to the generic `EXECUTION_FAILED` reason so implementation details and secrets are not exposed.
@@ -156,7 +160,7 @@ The convenience modules define no policies, executors, approval services, identi
 
 ## Reproducible Playground
 
-`agent-permit-playground` assembles the real P0 pipeline against in-memory counters and logs. Its file cases read `/workspace/README.md` and deny recursive deletion of `/workspace`; its SQL cases execute a `SELECT`, pause a selective `UPDATE`, then execute the exact approved update; its deployment cases execute staging, pause production, then execute the exact approved production invocation.
+`agent-permit-playground` assembles the real pipeline against in-memory counters and logs. Its file cases read `/workspace/README.md` and deny recursive deletion of `/workspace`; its SQL cases execute a `SELECT`, pause a selective `UPDATE`, then execute the exact approved update; its HTTP cases allow an external read, require approval for a write, and deny an SSRF target; its messaging cases require backend approval despite an approval claim in the message body, execute an exact approved send, and deny unlisted destinations and oversized content; its deployment cases execute staging, pause production, then execute the exact approved production invocation.
 
 The Maven `verify` phase runs the CLI after tests. The printed side-effect count comes from the injected mock `ToolExecutor`, while decisions, reasons, approval checks, idempotency, and timeline stages come from the production modules. No output is precomputed and no external system is contacted.
 
