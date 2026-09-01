@@ -3,12 +3,30 @@ const ui = {
   outcomeBadge: document.querySelector("#outcome-badge"),
   conversation: document.querySelector("#conversation"),
   timeline: document.querySelector("#timeline"),
+  decisionTitle: document.querySelector("#decision-title"),
+  decisionCopy: document.querySelector("#decision-copy"),
+  decisionHero: document.querySelector(".decision-hero"),
   reasonCode: document.querySelector("#reason-code"),
   sideEffectCount: document.querySelector("#side-effect-count"),
   approveButton: document.querySelector("#approve-button"),
   inspector: document.querySelector("#inspector-content"),
   error: document.querySelector("#error-state"),
   tabs: [...document.querySelectorAll("[data-tab]")]
+};
+
+const outcomeCopy = {
+  APPROVAL_REQUIRED: {
+    title: "需要人工确认",
+    copy: "风险策略已暂停执行；只有与当前调用指纹绑定的后端审批才能继续。"
+  },
+  EXECUTED: {
+    title: "演示执行已完成",
+    copy: "授权、风险与审批校验均已通过，执行器在受控边界内仅调用一次。"
+  },
+  DENIED: {
+    title: "请求已被阻断",
+    copy: "策略在副作用发生前终止调用，并返回可审计的稳定原因码。"
+  }
 };
 
 let fixtures = [];
@@ -74,7 +92,10 @@ function handleTabKey(event) {
 function showLoadError() {
   ui.outcomeBadge.textContent = "LOAD_FAILED";
   ui.outcomeBadge.dataset.outcome = "DENIED";
+  ui.decisionHero.dataset.outcome = "DENIED";
   ui.reasonCode.textContent = "FIXTURE_LOAD_FAILED";
+  ui.decisionTitle.textContent = "演示数据加载失败";
+  ui.decisionCopy.textContent = "请通过项目 README 中的本地预览命令重新打开页面。";
   ui.caseSelect.disabled = true;
   ui.error.hidden = false;
 }
@@ -101,8 +122,15 @@ function selectCase(id) {
 }
 
 function renderSummary(fixture) {
+  const decision = outcomeCopy[fixture.outcome] || {
+    title: fixture.outcome,
+    copy: "查看下方时间线和证据，核对本次调用的完整决策过程。"
+  };
   ui.outcomeBadge.textContent = fixture.outcome;
   ui.outcomeBadge.dataset.outcome = fixture.outcome;
+  ui.decisionHero.dataset.outcome = fixture.outcome;
+  ui.decisionTitle.textContent = decision.title;
+  ui.decisionCopy.textContent = decision.copy;
   ui.reasonCode.textContent = fixture.reasonCode;
   ui.sideEffectCount.textContent = String(fixture.sideEffectCount);
   ui.approveButton.hidden = !fixture.approvedCaseId;

@@ -12,26 +12,40 @@
     <div class="app-shell">
       <header class="topbar">
         <div class="brand-block">
-          <div class="brand-mark" aria-hidden="true">AP</div>
+          <div class="brand-mark" aria-hidden="true"><span>AP</span></div>
           <div>
-            <p class="eyebrow">TRUSTED EXECUTION PLAYGROUND</p>
+            <p class="eyebrow">TRUSTED TOOL EXECUTION</p>
             <h1>AgentPermit4j</h1>
           </div>
         </div>
-        <div class="case-controls">
-          <label for="case-select">演示案例</label>
-          <select id="case-select" aria-label="选择演示案例"></select>
-          <span id="outcome-badge" class="outcome-badge">LOADING</span>
+        <div class="header-meta">
+          <span class="control-status"><span aria-hidden="true"></span>本地演示</span>
+          <p>Fixture 数据 · 不连接外部系统</p>
         </div>
       </header>
 
-      <main>
+      <section class="case-bar" aria-label="演示案例选择">
+        <div class="case-copy">
+          <p class="section-kicker">PLAYGROUND SCENARIO</p>
+          <h2>观察一次工具调用如何被判定</h2>
+          <p>切换案例，对比放行、审批和拒绝路径。</p>
+        </div>
+        <div class="case-controls">
+          <label for="case-select">当前案例</label>
+          <div class="case-select-row">
+            <select id="case-select" aria-label="选择演示案例"></select>
+            <span id="outcome-badge" class="outcome-badge">LOADING</span>
+          </div>
+        </div>
+      </section>
+
+      <main class="workbench">
         <section class="overview-grid" aria-label="Agent 对话与执行时间线">
-          <article class="panel conversation-panel">
+          <article class="panel panel-dark conversation-panel">
             <div class="panel-heading">
               <div>
                 <p class="section-kicker">MODEL PROPOSAL</p>
-                <h2>Conversation</h2>
+                <h2>模型提议</h2>
               </div>
               <span class="trust-note">文本不能授予权限</span>
             </div>
@@ -42,27 +56,44 @@
             <div class="panel-heading">
               <div>
                 <p class="section-kicker">DETERMINISTIC BACKEND</p>
-                <h2>Execution timeline</h2>
+                <h2>决策路径</h2>
               </div>
               <button id="approve-button" class="approve-button" type="button" hidden>
                 查看审批后结果
               </button>
             </div>
-            <div class="decision-summary">
-              <div>
-                <span class="summary-label">Reason code</span>
-                <code id="reason-code">—</code>
+            <div class="decision-hero">
+              <div class="decision-verdict">
+                <span class="decision-signal" aria-hidden="true"></span>
+                <div>
+                  <p class="section-kicker">POLICY VERDICT</p>
+                  <h3 id="decision-title">正在载入决策</h3>
+                  <p id="decision-copy" class="decision-copy">正在读取本地演示数据。</p>
+                </div>
               </div>
-              <div>
-                <span class="summary-label">Executor calls</span>
-                <strong id="side-effect-count">0</strong>
+              <div class="decision-summary">
+                <div>
+                  <span class="summary-label">Reason code</span>
+                  <code id="reason-code">—</code>
+                </div>
+                <div>
+                  <span class="summary-label">Executor calls</span>
+                  <strong id="side-effect-count">0</strong>
+                </div>
               </div>
             </div>
             <ol id="timeline" class="timeline" aria-live="polite"></ol>
           </article>
         </section>
 
-        <section class="panel inspector" aria-label="调用详情">
+        <section class="panel inspector" aria-label="调用证据">
+          <div class="inspector-heading">
+            <div>
+              <p class="section-kicker">DECISION EVIDENCE</p>
+              <h2>调用证据</h2>
+            </div>
+            <p>选择一个视图，核对输入、策略与审计事实。</p>
+          </div>
           <div class="tab-list" role="tablist" aria-label="调用详情视图">
             <button id="tab-tool-calls" type="button" role="tab" data-tab="tool-calls" aria-controls="inspector-content" aria-selected="true" tabindex="0">Tool calls</button>
             <button id="tab-approvals" type="button" role="tab" data-tab="approvals" aria-controls="inspector-content" aria-selected="false" tabindex="-1">Approvals</button>
@@ -82,7 +113,7 @@
 
       <footer>
         <span>Fixture-driven preview · no external systems contacted</span>
-        <span>Java 21 · offline-safe</span>
+        <span>AgentPermit4j · Java 21 · offline-safe</span>
       </footer>
     </div>
   </body>
