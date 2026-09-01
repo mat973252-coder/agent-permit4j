@@ -63,7 +63,33 @@ var riskEvaluator =
 
 ## Spring AI 适配器
 
-`agent-permit-spring-ai` 提供可复用的 Spring AI 2.0 `ToolCallback`。应用显式提供 `ToolDefinition`、已经配置好的 `ResultDecisionPipeline` 和不可变的 `SpringAiToolContract`：
+`agent-permit-spring-ai` 提供可复用的 Spring AI 2.0 `ToolCallback`。常用的固定限制可以直接写在 Spring AI 的 `@Tool` 方法旁：
+
+```java
+interface OrderTools {
+  @Tool(name = "orders.create", description = "调用订单 API")
+  @AgentPermit(
+      resourceType = "http",
+      resourceArg = "uri",
+      effect = ToolEffect.WRITE,
+      risk = RiskLevel.HIGH,
+      environments = "production",
+      allowedHosts = "api.example.com",
+      allowedMethods = "POST",
+      maxPayloadBytes = 8192)
+  String createOrder(String uri, String method, String payload);
+}
+
+Method method = OrderTools.class.getDeclaredMethod(
+    "createOrder", String.class, String.class, String.class);
+ToolCallback callback = GuardedToolCallback.fromAnnotated(dependencies, method);
+```
+
+工厂会从 `@Tool` 派生工具名称和输入 schema。`risk` 是风险下限：已有动态 evaluator 可以把风险调高，不能调低。`environments` 校验可信 `ToolContext`；HTTP 的 `allowedHosts`、`allowedMethods` 和 `maxPayloadBytes` 会在执行前约束 `uri`、`method`、`payload` 参数。host 配置只写主机名；配置 `allowedHosts` 后，匹配的请求必须使用 HTTPS 默认端口。
+
+注解只声明策略，不反射执行 Java 方法，也不取代应用策略。真正的 API、SQL、文件或中间件调用仍由注入的 pipeline executor 完成，因此校验、审批、幂等、审计始终共享同一个执行边界。动态规则继续放在已有 authorizer 和 risk evaluator 中即可。这里不引入组件扫描或 AOP。
+
+需要动态生成元数据时，仍可使用底层 API。应用显式提供 `ToolDefinition`、已经配置好的 `ResultDecisionPipeline` 和不可变的 `SpringAiToolContract`：
 
 ```java
 ToolCallback callback = new GuardedToolCallback(definition, pipeline, contract);

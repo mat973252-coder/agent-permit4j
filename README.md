@@ -58,7 +58,33 @@ The registry and policy take immutable snapshots. A configuration system can bui
 
 ## Spring AI adapter
 
-`agent-permit-spring-ai` exposes a reusable Spring AI 2.0 `ToolCallback`. Applications provide a `ToolDefinition`, a configured `ResultDecisionPipeline`, and an immutable `SpringAiToolContract`:
+`agent-permit-spring-ai` exposes a reusable Spring AI 2.0 `ToolCallback`. For the common case, declare the fixed limits next to Spring AI's `@Tool` method:
+
+```java
+interface OrderTools {
+  @Tool(name = "orders.create", description = "Call the order API")
+  @AgentPermit(
+      resourceType = "http",
+      resourceArg = "uri",
+      effect = ToolEffect.WRITE,
+      risk = RiskLevel.HIGH,
+      environments = "production",
+      allowedHosts = "api.example.com",
+      allowedMethods = "POST",
+      maxPayloadBytes = 8192)
+  String createOrder(String uri, String method, String payload);
+}
+
+Method method = OrderTools.class.getDeclaredMethod(
+    "createOrder", String.class, String.class, String.class);
+ToolCallback callback = GuardedToolCallback.fromAnnotated(dependencies, method);
+```
+
+The factory derives the tool name and input schema from `@Tool`. `risk` is a minimum: the configured dynamic evaluator may raise it but cannot lower it. `environments` uses trusted `ToolContext`; HTTP `allowedHosts`, `allowedMethods`, and `maxPayloadBytes` constrain the `uri`, `method`, and `payload` arguments before execution. Host entries are bare host names; when `allowedHosts` is configured, matching requests must use HTTPS with the default port.
+
+The annotation declares policy; it does not reflectively execute the Java method or replace application policy. The actual API, SQL, file, or middleware call remains the injected pipeline executor, so validation, approval, idempotency, and audit keep one execution boundary. Applications that need dynamic rules can keep the annotation small and use the existing authorizer and risk evaluator for the rest. No component scanning or AOP is involved.
+
+The lower-level API remains available when metadata is supplied dynamically. Applications provide a `ToolDefinition`, a configured `ResultDecisionPipeline`, and an immutable `SpringAiToolContract`:
 
 ```java
 ToolCallback callback = new GuardedToolCallback(definition, pipeline, contract);

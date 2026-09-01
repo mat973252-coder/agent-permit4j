@@ -2,11 +2,13 @@ package io.github.mat973252.agentpermit.springai;
 
 import io.github.mat973252.agentpermit.execution.ResultDecisionPipeline;
 import io.github.mat973252.agentpermit.execution.ToolExecutionResult;
+import java.lang.reflect.Method;
 import java.util.LinkedHashMap;
 import java.util.Objects;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
+import org.springframework.ai.tool.support.ToolDefinitions;
 import org.springframework.ai.util.JsonHelper;
 
 public final class GuardedToolCallback implements ToolCallback {
@@ -30,6 +32,21 @@ public final class GuardedToolCallback implements ToolCallback {
           "definition name must match contract descriptor name");
     }
     mapper = new SpringAiInvocationMapper(requiredContract);
+  }
+
+  public static GuardedToolCallback fromAnnotated(
+      ResultDecisionPipeline.Dependencies dependencies, Method method) {
+    Objects.requireNonNull(method, "method");
+    return fromAnnotated(ToolDefinitions.from(method), dependencies, method);
+  }
+
+  public static GuardedToolCallback fromAnnotated(
+      ToolDefinition definition,
+      ResultDecisionPipeline.Dependencies dependencies,
+      Method method) {
+    var policy = AgentPermitMethodPolicy.from(definition, method);
+    var pipeline = new ResultDecisionPipeline(policy.decorate(dependencies));
+    return new GuardedToolCallback(definition, pipeline, policy.contract());
   }
 
   @Override
