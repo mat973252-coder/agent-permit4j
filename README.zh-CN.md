@@ -222,6 +222,18 @@ Linux/macOS：
 
 所有场景完成后，进程以状态码 `0` 退出。
 
+### 打开静态 Web UI
+
+第一版 Web UI 是 fixture 驱动的执行控制台，展示对话、确定性时间线、精确审批详情、审计事件、未来 RAG 集成的合成权限边界样例、策略解释和 replay-safe 视图。点击“查看审批后结果”只会切换到与当前调用完全一致的本地已审批 fixture，并展示一次历史 executor 调用。这一版仅用于静态演示；真实 decision／approval API 接入属于下一切片。
+
+在仓库根目录运行 Java 21 自带的静态服务器：
+
+```powershell
+jwebserver -b 127.0.0.1 -p 8088 -d agent-permit-playground/src/main/resources/webui
+```
+
+随后打开 `http://127.0.0.1:8088/`。不需要 Node.js、前端依赖安装、数据库或外部服务。
+
 ## 完整构建
 
 Windows：

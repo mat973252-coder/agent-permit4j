@@ -43,6 +43,8 @@ The backlog is ordered by proof of value. Each item includes an observable accep
   - [x] Add runtime evaluator routing plus configurable HTTP host, SSRF, method, and payload policies with Playground cases.
   - [x] Add messaging mock tools and destination/content policies.
 - [ ] Implement the Playground web UI: conversation, execution timeline, approval detail, audit, policy explanation, and replay view.
+  - [x] Add an offline static wireframe with synthetic fixture JSON and clickable approval/replay views.
+  - [ ] Connect the UI to live decision, approval, audit, and replay APIs.
 - [ ] Add Spring Security principal resolution and tenant/environment propagation.
 
 Acceptance: a Spring AI sample can request a tool, pause for persisted approval, resume once, and expose a complete audit timeline.

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="AgentPermit4j trusted tool execution playground">
+    <title>AgentPermit4j · Execution Console</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-block">
+          <div class="brand-mark" aria-hidden="true">AP</div>
+          <div>
+            <p class="eyebrow">TRUSTED EXECUTION PLAYGROUND</p>
+            <h1>AgentPermit4j</h1>
+          </div>
+        </div>
+        <div class="case-controls">
+          <label for="case-select">演示案例</label>
+          <select id="case-select" aria-label="选择演示案例"></select>
+          <span id="outcome-badge" class="outcome-badge">LOADING</span>
+        </div>
+      </header>
+
+      <main>
+        <section class="overview-grid" aria-label="Agent 对话与执行时间线">
+          <article class="panel conversation-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">MODEL PROPOSAL</p>
+                <h2>Conversation</h2>
+              </div>
+              <span class="trust-note">文本不能授予权限</span>
+            </div>
+            <div id="conversation" class="conversation" aria-live="polite"></div>
+          </article>
+
+          <article class="panel timeline-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">DETERMINISTIC BACKEND</p>
+                <h2>Execution timeline</h2>
+              </div>
+              <button id="approve-button" class="approve-button" type="button" hidden>
+                查看审批后结果
+              </button>
+            </div>
+            <div class="decision-summary">
+              <div>
+                <span class="summary-label">Reason code</span>
+                <code id="reason-code">—</code>
+              </div>
+              <div>
+                <span class="summary-label">Executor calls</span>
+                <strong id="side-effect-count">0</strong>
+              </div>
+            </div>
+            <ol id="timeline" class="timeline" aria-live="polite"></ol>
+          </article>
+        </section>
+
+        <section class="panel inspector" aria-label="调用详情">
+          <div class="tab-list" role="tablist" aria-label="调用详情视图">
+            <button id="tab-tool-calls" type="button" role="tab" data-tab="tool-calls" aria-controls="inspector-content" aria-selected="true" tabindex="0">Tool calls</button>
+            <button id="tab-approvals" type="button" role="tab" data-tab="approvals" aria-controls="inspector-content" aria-selected="false" tabindex="-1">Approvals</button>
+            <button id="tab-audit" type="button" role="tab" data-tab="audit" aria-controls="inspector-content" aria-selected="false" tabindex="-1">Audit</button>
+            <button id="tab-rag-trace" type="button" role="tab" data-tab="rag-trace" aria-controls="inspector-content" aria-selected="false" tabindex="-1">RAG trace (fixture)</button>
+            <button id="tab-policies" type="button" role="tab" data-tab="policies" aria-controls="inspector-content" aria-selected="false" tabindex="-1">Policies</button>
+            <button id="tab-replay" type="button" role="tab" data-tab="replay" aria-controls="inspector-content" aria-selected="false" tabindex="-1">Replay</button>
+          </div>
+          <div id="inspector-content" class="inspector-content" role="tabpanel" aria-labelledby="tab-tool-calls"></div>
+        </section>
+
+        <section id="error-state" class="error-state" hidden>
+          <strong>无法加载演示数据</strong>
+          <span>请通过 README 中的 jwebserver 命令打开本页面。</span>
+        </section>
+      </main>
+
+      <footer>
+        <span>Fixture-driven preview · no external systems contacted</span>
+        <span>Java 21 · offline-safe</span>
+      </footer>
+    </div>
+  </body>
+</html>

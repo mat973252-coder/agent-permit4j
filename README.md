@@ -198,6 +198,18 @@ On Windows:
 
 Each case prints its structured outcome, stable reason code, observed mock side-effect count, and audit stages. The process exits with code `0` after all scenarios complete.
 
+### Open the static Web UI
+
+The first Web UI slice is a fixture-driven execution console. It shows the conversation, deterministic timeline, exact approval details, audit events, a synthetic future-RAG boundary fixture, policy explanation, and replay-safe view. Selecting **View approved result** only switches to the matching local fixture and shows one historical executor call. It is a static demonstration; live decision and approval APIs remain a later slice.
+
+From the repository root, use the static server bundled with Java 21:
+
+```bash
+jwebserver -b 127.0.0.1 -p 8088 -d agent-permit-playground/src/main/resources/webui
+```
+
+Then open `http://127.0.0.1:8088/`. No Node.js, frontend dependency installation, database, or external service is required.
+
 ## Build
 
 Requirements: Java 21. No global Maven installation is required.
