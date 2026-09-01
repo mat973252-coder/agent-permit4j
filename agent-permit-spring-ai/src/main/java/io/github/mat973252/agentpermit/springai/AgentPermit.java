@@ -10,18 +10,19 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+/** Declares fixed tool limits with conservative defaults for a high-risk HTTP write. */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
 public @interface AgentPermit {
 
-  String resourceType();
+  String resourceType() default "http";
 
-  String resourceArg();
+  String resourceArg() default "uri";
 
-  ToolEffect effect();
+  ToolEffect effect() default ToolEffect.WRITE;
 
-  RiskLevel risk();
+  RiskLevel risk() default RiskLevel.HIGH;
 
   Reversibility reversibility() default Reversibility.IRREVERSIBLE;
 
@@ -29,9 +30,9 @@ public @interface AgentPermit {
 
   String[] environments() default {};
 
-  String[] allowedHosts() default {};
+  String[] hosts() default {};
 
-  String[] allowedMethods() default {};
+  String[] methods() default {};
 
-  long maxPayloadBytes() default -1;
+  long maxBytes() default -1;
 }

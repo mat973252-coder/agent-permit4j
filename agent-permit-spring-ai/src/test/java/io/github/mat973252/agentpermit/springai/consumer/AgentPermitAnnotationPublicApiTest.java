@@ -4,8 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.mat973252.agentpermit.core.DataSensitivity;
 import io.github.mat973252.agentpermit.core.DecisionOutcome;
 import io.github.mat973252.agentpermit.core.GateDecision;
+import io.github.mat973252.agentpermit.core.Reversibility;
 import io.github.mat973252.agentpermit.core.RiskAssessment;
 import io.github.mat973252.agentpermit.core.RiskLevel;
 import io.github.mat973252.agentpermit.core.ToolEffect;
@@ -16,6 +18,7 @@ import io.github.mat973252.agentpermit.springai.AgentPermit;
 import io.github.mat973252.agentpermit.springai.GuardedToolCallback;
 import io.github.mat973252.agentpermit.springai.SpringAiToolContextKeys;
 import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -28,10 +31,8 @@ class AgentPermitAnnotationPublicApiTest {
 
   @Test
   void annotationRiskRequiresApprovalBeforeExecution() {
-    var fixture = new Fixture(RiskLevel.LOW, "BASE_LOW", method("createOrder"));
-    var input =
-        "{\"uri\":\"https://api.example.com/orders\","
-            + "\"method\":\"POST\",\"payload\":\"{}\"}";
+    var fixture = new Fixture(RiskLevel.LOW, "BASE_LOW", method("createOrder", 2));
+    var input = "{\"uri\":\"https://api.example.com/orders\",\"payload\":\"{}\"}";
 
     var pending = fixture.callback.call(input, context("production", null, "pending"));
     var approved = fixture.callback.call(input, context("production", "approval-1", "approved"));
@@ -40,11 +41,17 @@ class AgentPermitAnnotationPublicApiTest {
     assertTrue(pending.contains("\"reasonCode\":\"ANNOTATION_RISK_HIGH\""));
     assertTrue(approved.contains("\"outcome\":\"EXECUTED\""));
     assertEquals(1, fixture.executions.get());
+    assertEquals("http", fixture.invocation.get().resource().type());
+    assertEquals("https://api.example.com/orders", fixture.invocation.get().resource().identifier());
+    assertEquals(ToolEffect.WRITE, fixture.invocation.get().descriptor().effect());
+    assertEquals(Reversibility.IRREVERSIBLE, fixture.invocation.get().descriptor().reversibility());
+    assertEquals(
+        DataSensitivity.RESTRICTED, fixture.invocation.get().descriptor().dataSensitivity());
   }
 
   @Test
   void annotationParametersDenyDisallowedCalls() {
-    var fixture = new Fixture(RiskLevel.LOW, "BASE_LOW", method("createOrder"));
+    var fixture = new Fixture(RiskLevel.LOW, "BASE_LOW", method("restrictedOrder", 3));
 
     var environment =
         fixture.callback.call(validInput(), context("staging", "approval-1", "environment"));
@@ -70,7 +77,7 @@ class AgentPermitAnnotationPublicApiTest {
 
   @Test
   void annotationRiskCannotLowerDynamicRisk() {
-    var fixture = new Fixture(RiskLevel.CRITICAL, "DYNAMIC_CRITICAL", method("readOrder"));
+    var fixture = new Fixture(RiskLevel.CRITICAL, "DYNAMIC_CRITICAL", method("readOrder", 3));
 
     var result =
         fixture.callback.call(
@@ -87,14 +94,14 @@ class AgentPermitAnnotationPublicApiTest {
     var exception =
         assertThrows(
             IllegalArgumentException.class,
-            () -> new Fixture(RiskLevel.LOW, "BASE_LOW", method("invalidSqlTool")));
+            () -> new Fixture(RiskLevel.LOW, "BASE_LOW", method("invalidSqlTool", 3)));
 
     assertEquals("HTTP annotation limits require resourceType http", exception.getMessage());
   }
 
   @Test
   void derivesToolIdentityFromSpringToolAnnotation() {
-    var fixture = new Fixture(RiskLevel.LOW, "BASE_LOW", method("namedReadOrder"));
+    var fixture = new Fixture(RiskLevel.LOW, "BASE_LOW", method("namedReadOrder", 3));
 
     var result =
         fixture.callback.call(
@@ -112,9 +119,25 @@ class AgentPermitAnnotationPublicApiTest {
     var exception =
         assertThrows(
             IllegalArgumentException.class,
-            () -> new Fixture(RiskLevel.LOW, "BASE_LOW", method("unannotatedTool")));
+            () -> new Fixture(RiskLevel.LOW, "BASE_LOW", method("unannotatedTool", 3)));
 
     assertEquals("method must declare @AgentPermit", exception.getMessage());
+  }
+
+  @Test
+  void nonHttpToolOnlyOverridesResourceMapping() {
+    var fixture = new Fixture(RiskLevel.LOW, "BASE_LOW", method("redisWrite", 2));
+    var input = "{\"key\":\"orders:1\",\"payload\":\"{}\"}";
+
+    var pending = fixture.callback.call(input, context("production", null, "redis-pending"));
+    var approved =
+        fixture.callback.call(input, context("production", "approval-1", "redis-approved"));
+
+    assertTrue(pending.contains("\"outcome\":\"APPROVAL_REQUIRED\""));
+    assertTrue(pending.contains("\"reasonCode\":\"ANNOTATION_RISK_HIGH\""));
+    assertTrue(approved.contains("\"outcome\":\"EXECUTED\""));
+    assertEquals("redis", fixture.invocation.get().resource().type());
+    assertEquals("orders:1", fixture.invocation.get().resource().identifier());
   }
 
   private static void assertReason(String result, String reasonCode) {
@@ -127,9 +150,11 @@ class AgentPermitAnnotationPublicApiTest {
         + "\"method\":\"POST\",\"payload\":\"{}\"}";
   }
 
-  private static Method method(String name) {
+  private static Method method(String name, int parameterCount) {
     try {
-      return Tools.class.getDeclaredMethod(name, String.class, String.class, String.class);
+      var parameterTypes = new Class<?>[parameterCount];
+      Arrays.fill(parameterTypes, String.class);
+      return Tools.class.getDeclaredMethod(name, parameterTypes);
     } catch (NoSuchMethodException exception) {
       throw new AssertionError(exception);
     }
@@ -175,29 +200,25 @@ class AgentPermitAnnotationPublicApiTest {
   private interface Tools {
 
     @Tool(description = "Create an order")
+    @AgentPermit(hosts = "api.example.com", maxBytes = 4)
+    String createOrder(String uri, String payload);
+
+    @Tool(description = "Restricted order operation")
     @AgentPermit(
-        resourceType = "http",
-        resourceArg = "uri",
-        effect = ToolEffect.WRITE,
-        risk = RiskLevel.HIGH,
         environments = "production",
-        allowedHosts = "api.example.com",
-        allowedMethods = "POST",
-        maxPayloadBytes = 4)
-    String createOrder(String uri, String method, String payload);
+        hosts = "api.example.com",
+        methods = "POST",
+        maxBytes = 4)
+    String restrictedOrder(String uri, String method, String payload);
 
     @Tool(description = "Read an order")
     @AgentPermit(
-        resourceType = "http",
-        resourceArg = "uri",
         effect = ToolEffect.READ,
         risk = RiskLevel.LOW)
     String readOrder(String uri, String method, String payload);
 
     @Tool(name = "orders.read", description = "Read an order by name")
     @AgentPermit(
-        resourceType = "http",
-        resourceArg = "uri",
         effect = ToolEffect.READ,
         risk = RiskLevel.LOW)
     String namedReadOrder(String uri, String method, String payload);
@@ -209,9 +230,11 @@ class AgentPermitAnnotationPublicApiTest {
     @AgentPermit(
         resourceType = "sql",
         resourceArg = "sql",
-        effect = ToolEffect.WRITE,
-        risk = RiskLevel.HIGH,
-        allowedMethods = "POST")
+        methods = "POST")
     String invalidSqlTool(String sql, String method, String payload);
+
+    @Tool(description = "Write a Redis key")
+    @AgentPermit(resourceType = "redis", resourceArg = "key")
+    String redisWrite(String key, String payload);
   }
 }

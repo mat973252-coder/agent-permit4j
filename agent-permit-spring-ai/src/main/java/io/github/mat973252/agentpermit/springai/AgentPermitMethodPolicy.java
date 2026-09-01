@@ -37,8 +37,8 @@ final class AgentPermitMethodPolicy {
             permit.resourceType(),
             permit.resourceArg());
     environments = values(permit.environments(), "environments", false);
-    hosts = values(permit.allowedHosts(), "allowedHosts", true);
-    methods = values(permit.allowedMethods(), "allowedMethods", true);
+    hosts = values(permit.hosts(), "hosts", true);
+    methods = values(permit.methods(), "methods", true);
     validateLimits();
   }
 
@@ -97,8 +97,8 @@ final class AgentPermitMethodPolicy {
       return denied("ANNOTATION_METHOD_DENIED");
     }
     var payload = invocation.arguments().getOrDefault("payload", "");
-    if (permit.maxPayloadBytes() >= 0
-        && payload.getBytes(StandardCharsets.UTF_8).length > permit.maxPayloadBytes()) {
+    if (permit.maxBytes() >= 0
+        && payload.getBytes(StandardCharsets.UTF_8).length > permit.maxBytes()) {
       return denied("ANNOTATION_PAYLOAD_TOO_LARGE");
     }
     return null;
@@ -116,11 +116,11 @@ final class AgentPermitMethodPolicy {
   }
 
   private void validateLimits() {
-    if (permit.maxPayloadBytes() < -1) {
-      throw new IllegalArgumentException("maxPayloadBytes must be -1 or non-negative");
+    if (permit.maxBytes() < -1) {
+      throw new IllegalArgumentException("maxBytes must be -1 or non-negative");
     }
     var hasHttpLimits =
-        !hosts.isEmpty() || !methods.isEmpty() || permit.maxPayloadBytes() >= 0;
+        !hosts.isEmpty() || !methods.isEmpty() || permit.maxBytes() >= 0;
     if (hasHttpLimits && !contract.resourceType().equals("http")) {
       throw new IllegalArgumentException(
           "HTTP annotation limits require resourceType http");
