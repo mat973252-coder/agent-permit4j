@@ -5,6 +5,7 @@ import io.github.mat973252.agentpermit.execution.ToolExecutionResult;
 import java.lang.reflect.Method;
 import java.util.LinkedHashMap;
 import java.util.Objects;
+import java.util.function.Function;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
@@ -18,14 +19,25 @@ public final class GuardedToolCallback implements ToolCallback {
   private final ToolDefinition definition;
   private final ResultDecisionPipeline pipeline;
   private final SpringAiInvocationMapper mapper;
+  private final Function<String, String> errorMessageResolver;
   private final JsonHelper json = new JsonHelper();
 
   public GuardedToolCallback(
       ToolDefinition definition,
       ResultDecisionPipeline pipeline,
       SpringAiToolContract contract) {
+    this(definition, pipeline, contract, reasonCode -> null);
+  }
+
+  private GuardedToolCallback(
+      ToolDefinition definition,
+      ResultDecisionPipeline pipeline,
+      SpringAiToolContract contract,
+      Function<String, String> errorMessageResolver) {
     this.definition = Objects.requireNonNull(definition, "definition");
     this.pipeline = Objects.requireNonNull(pipeline, "pipeline");
+    this.errorMessageResolver =
+        Objects.requireNonNull(errorMessageResolver, "errorMessageResolver");
     var requiredContract = Objects.requireNonNull(contract, "contract");
     if (!definition.name().equals(requiredContract.descriptor().name())) {
       throw new IllegalArgumentException(
@@ -46,7 +58,8 @@ public final class GuardedToolCallback implements ToolCallback {
       Method method) {
     var policy = AgentPermitMethodPolicy.from(definition, method);
     var pipeline = new ResultDecisionPipeline(policy.decorate(dependencies));
-    return new GuardedToolCallback(definition, pipeline, policy.contract());
+    return new GuardedToolCallback(
+        definition, pipeline, policy.contract(), policy::errorMessage);
   }
 
   @Override
@@ -75,18 +88,24 @@ public final class GuardedToolCallback implements ToolCallback {
   }
 
   private String decisionJson(ToolExecutionResult result) {
-    return decisionJson(
-        result.decision().outcome().name(), result.decision().reasonCode(), result.output());
+    var outcome = result.decision().outcome().name();
+    var reasonCode = result.decision().reasonCode();
+    var message = "DENIED".equals(outcome) ? errorMessageResolver.apply(reasonCode) : null;
+    return decisionJson(outcome, reasonCode, result.output(), message);
   }
 
   private String decisionJson(String outcome, String reasonCode) {
-    return decisionJson(outcome, reasonCode, null);
+    return decisionJson(outcome, reasonCode, null, null);
   }
 
-  private String decisionJson(String outcome, String reasonCode, String output) {
+  private String decisionJson(
+      String outcome, String reasonCode, String output, String message) {
     var envelope = new LinkedHashMap<String, Object>();
     envelope.put("outcome", outcome);
     envelope.put("reasonCode", reasonCode);
+    if (message != null) {
+      envelope.put("message", message);
+    }
     if (output != null) {
       envelope.put("output", output);
     }

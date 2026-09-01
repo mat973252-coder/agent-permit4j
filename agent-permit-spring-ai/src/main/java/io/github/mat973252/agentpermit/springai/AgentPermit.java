@@ -35,4 +35,8 @@ public @interface AgentPermit {
   String[] methods() default {};
 
   long maxBytes() default -1;
+
+  String errorCode() default "";
+
+  String errorMessage() default "";
 }

@@ -74,6 +74,17 @@ ToolCallback callback = GuardedToolCallback.fromAnnotated(dependencies, method);
 
 The common case defaults to `resourceType="http"`, `resourceArg="uri"`, `effect=WRITE`, `risk=HIGH`, `reversibility=IRREVERSIBLE`, and `dataSensitivity=RESTRICTED`. Only overrides need to be written. The factory derives the tool name and input schema from `@Tool`. `risk` is a minimum: the configured dynamic evaluator may raise it but cannot lower it. `environments` uses trusted `ToolContext`; optional HTTP `hosts`, `methods`, and `maxBytes` constrain the `uri`, `method`, and `payload` arguments before execution. Host entries are bare host names; when `hosts` is configured, matching requests must use HTTPS with the default port.
 
+Annotation denials use the built-in stable reason codes by default. A tool may replace the code, the display message, or both:
+
+```java
+@AgentPermit(
+    hosts = "api.example.com",
+    errorCode = "ORDER_API_DENIED",
+    errorMessage = "Only the order API is allowed")
+```
+
+`errorCode` must be an uppercase machine code; `ANNOTATION_*` is reserved and rejected at construction. The application is responsible for choosing a code that does not collide with another policy reason for the same tool. Other pipeline stages keep their own reason codes. The selected custom code becomes the terminal decision reason and is audited; `errorMessage` is resolved from that denial code, returned in the callback JSON, and never added to the decision or audit event.
+
 The annotation declares policy; it does not reflectively execute the Java method or replace application policy. The actual API, SQL, file, or middleware call remains the injected pipeline executor, so validation, approval, idempotency, and audit keep one execution boundary. Applications that need dynamic rules can keep the annotation small and use the existing authorizer and risk evaluator for the rest. No component scanning or AOP is involved.
 
 For a non-HTTP write, override only its resource mapping, for example `@AgentPermit(resourceType = "redis", resourceArg = "key")`.

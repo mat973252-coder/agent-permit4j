@@ -79,6 +79,17 @@ ToolCallback callback = GuardedToolCallback.fromAnnotated(dependencies, method);
 
 常用场景默认采用 `resourceType="http"`、`resourceArg="uri"`、`effect=WRITE`、`risk=HIGH`、`reversibility=IRREVERSIBLE` 和 `dataSensitivity=RESTRICTED`，只有需要覆盖时才写。工厂会从 `@Tool` 派生工具名称和输入 schema。`risk` 是风险下限：已有动态 evaluator 可以把风险调高，不能调低。`environments` 校验可信 `ToolContext`；可选的 HTTP `hosts`、`methods` 和 `maxBytes` 会在执行前约束 `uri`、`method`、`payload` 参数。host 只写主机名；配置 `hosts` 后，匹配的请求必须使用 HTTPS 默认端口。
 
+注解拒绝默认返回内置稳定错误码，也可以只修改错误码、只增加展示文案，或者同时修改：
+
+```java
+@AgentPermit(
+    hosts = "api.example.com",
+    errorCode = "ORDER_API_DENIED",
+    errorMessage = "该工具只能访问订单服务")
+```
+
+`errorCode` 必须是大写机器码；内置 `ANNOTATION_*` 前缀会在构造期被拒绝。应用负责选择一个不与同一工具其他策略原因码冲突的 code。其他管线阶段仍保留自己的原因码。自定义 code 会成为终态决策原因并进入审计；`errorMessage` 按该拒绝码解析，只出现在 callback JSON 中，不进入决策或审计事件。
+
 注解只声明策略，不反射执行 Java 方法，也不取代应用策略。真正的 API、SQL、文件或中间件调用仍由注入的 pipeline executor 完成，因此校验、审批、幂等、审计始终共享同一个执行边界。动态规则继续放在已有 authorizer 和 risk evaluator 中即可。这里不引入组件扫描或 AOP。
 
 非 HTTP 写操作只覆盖资源映射即可，例如 `@AgentPermit(resourceType = "redis", resourceArg = "key")`。

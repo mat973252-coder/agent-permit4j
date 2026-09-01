@@ -1,6 +1,7 @@
 package io.github.mat973252.agentpermit.springai.consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -140,9 +141,69 @@ class AgentPermitAnnotationPublicApiTest {
     assertEquals("orders:1", fixture.invocation.get().resource().identifier());
   }
 
+  @Test
+  void annotationDenialCanReturnCustomError() {
+    var fixture = new Fixture(RiskLevel.LOW, "BASE_LOW", method("customErrorOrder", 2));
+
+    var result =
+        fixture.callback.call(
+            "{\"uri\":\"https://evil.example.com/orders\",\"payload\":\"{}\"}",
+            context("production", null, "custom-error"));
+    var approval =
+        fixture.callback.call(
+            "{\"uri\":\"https://api.example.com/orders\",\"payload\":\"{}\"}",
+            context("production", null, "custom-approval"));
+
+    assertEquals(
+        "{\"outcome\":\"DENIED\",\"reasonCode\":\"ORDER_API_DENIED\","
+            + "\"message\":\"Only the order API is allowed\"}",
+        result);
+    assertTrue(approval.contains("\"outcome\":\"APPROVAL_REQUIRED\""));
+    assertTrue(approval.contains("\"reasonCode\":\"ANNOTATION_RISK_HIGH\""));
+    assertFalse(approval.contains("\"message\""));
+    assertEquals(0, fixture.executions.get());
+  }
+
+  @Test
+  void rejectsInvalidCustomErrorCode() {
+    var exception =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> new Fixture(RiskLevel.LOW, "BASE_LOW", method("invalidErrorCode", 2)));
+
+    assertEquals("errorCode must be an uppercase machine code", exception.getMessage());
+  }
+
+  @Test
+  void annotationDenialCanKeepDefaultCodeWithCustomMessage() {
+    var fixture = new Fixture(RiskLevel.LOW, "BASE_LOW", method("customMessageOrder", 2));
+
+    var result =
+        fixture.callback.call(
+            "{\"uri\":\"https://evil.example.com/orders\",\"payload\":\"{}\"}",
+            context("production", null, "custom-message"));
+
+    assertEquals(
+        "{\"outcome\":\"DENIED\",\"reasonCode\":\"ANNOTATION_HOST_DENIED\","
+            + "\"message\":\"Only the order API is allowed\"}",
+        result);
+    assertEquals(0, fixture.executions.get());
+  }
+
+  @Test
+  void rejectsReservedCustomErrorCode() {
+    var exception =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> new Fixture(RiskLevel.LOW, "BASE_LOW", method("reservedErrorCode", 2)));
+
+    assertEquals("errorCode must not use reserved ANNOTATION_ prefix", exception.getMessage());
+  }
+
   private static void assertReason(String result, String reasonCode) {
     assertTrue(result.contains("\"outcome\":\"DENIED\""));
     assertTrue(result.contains("\"reasonCode\":\"" + reasonCode + "\""));
+    assertFalse(result.contains("\"message\""));
   }
 
   private static String validInput() {
@@ -236,5 +297,26 @@ class AgentPermitAnnotationPublicApiTest {
     @Tool(description = "Write a Redis key")
     @AgentPermit(resourceType = "redis", resourceArg = "key")
     String redisWrite(String key, String payload);
+
+    @Tool(description = "Create an order with a custom error")
+    @AgentPermit(
+        hosts = "api.example.com",
+        errorCode = "ORDER_API_DENIED",
+        errorMessage = "Only the order API is allowed")
+    String customErrorOrder(String uri, String payload);
+
+    @Tool(description = "Invalid custom error code")
+    @AgentPermit(hosts = "api.example.com", errorCode = "invalid-code")
+    String invalidErrorCode(String uri, String payload);
+
+    @Tool(description = "Create an order with a custom message")
+    @AgentPermit(
+        hosts = "api.example.com",
+        errorMessage = "Only the order API is allowed")
+    String customMessageOrder(String uri, String payload);
+
+    @Tool(description = "Reserved custom error code")
+    @AgentPermit(hosts = "api.example.com", errorCode = "ANNOTATION_CUSTOM_DENIED")
+    String reservedErrorCode(String uri, String payload);
   }
 }

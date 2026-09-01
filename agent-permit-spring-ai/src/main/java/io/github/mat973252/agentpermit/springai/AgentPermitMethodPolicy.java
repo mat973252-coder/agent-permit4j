@@ -3,6 +3,7 @@ package io.github.mat973252.agentpermit.springai;
 import io.github.mat973252.agentpermit.core.Action;
 import io.github.mat973252.agentpermit.core.GateDecision;
 import io.github.mat973252.agentpermit.core.RiskAssessment;
+import io.github.mat973252.agentpermit.core.RiskLevel;
 import io.github.mat973252.agentpermit.core.ToolDescriptor;
 import io.github.mat973252.agentpermit.core.ToolInvocation;
 import io.github.mat973252.agentpermit.execution.ResultDecisionPipeline;
@@ -13,10 +14,20 @@ import java.util.Arrays;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.springframework.ai.tool.definition.ToolDefinition;
 
 final class AgentPermitMethodPolicy {
+
+  private static final Pattern ERROR_CODE = Pattern.compile("[A-Z][A-Z0-9_]*");
+  private static final Set<String> DEFAULT_DENIAL_CODES =
+      Set.of(
+          "ANNOTATION_ENVIRONMENT_DENIED",
+          "ANNOTATION_HOST_DENIED",
+          "ANNOTATION_METHOD_DENIED",
+          "ANNOTATION_PAYLOAD_TOO_LARGE",
+          "ANNOTATION_RISK_DENY");
 
   private final AgentPermit permit;
   private final SpringAiToolContract contract;
@@ -40,6 +51,7 @@ final class AgentPermitMethodPolicy {
     hosts = values(permit.hosts(), "hosts", true);
     methods = values(permit.methods(), "methods", true);
     validateLimits();
+    validateError();
   }
 
   static AgentPermitMethodPolicy from(ToolDefinition definition, Method method) {
@@ -54,6 +66,18 @@ final class AgentPermitMethodPolicy {
 
   SpringAiToolContract contract() {
     return contract;
+  }
+
+  String errorMessage(String reasonCode) {
+    if (permit.errorMessage().isEmpty()) {
+      return null;
+    }
+    var customCode = permit.errorCode();
+    var matches =
+        customCode.isEmpty()
+            ? DEFAULT_DENIAL_CODES.contains(reasonCode)
+            : customCode.equals(reasonCode);
+    return matches ? permit.errorMessage() : null;
   }
 
   ResultDecisionPipeline.Dependencies decorate(
@@ -111,8 +135,10 @@ final class AgentPermitMethodPolicy {
     if (permit.risk().ordinal() <= dynamic.level().ordinal()) {
       return dynamic;
     }
-    return new RiskAssessment(
-        permit.risk(), "ANNOTATION_RISK_" + permit.risk().name());
+    var reasonCode = "ANNOTATION_RISK_" + permit.risk().name();
+    var finalReasonCode =
+        permit.risk() == RiskLevel.DENY ? annotationReason(reasonCode) : reasonCode;
+    return new RiskAssessment(permit.risk(), finalReasonCode);
   }
 
   private void validateLimits() {
@@ -124,6 +150,20 @@ final class AgentPermitMethodPolicy {
     if (hasHttpLimits && !contract.resourceType().equals("http")) {
       throw new IllegalArgumentException(
           "HTTP annotation limits require resourceType http");
+    }
+  }
+
+  private void validateError() {
+    if (!permit.errorCode().isEmpty()
+        && !ERROR_CODE.matcher(permit.errorCode()).matches()) {
+      throw new IllegalArgumentException("errorCode must be an uppercase machine code");
+    }
+    if (permit.errorCode().startsWith("ANNOTATION_")) {
+      throw new IllegalArgumentException(
+          "errorCode must not use reserved ANNOTATION_ prefix");
+    }
+    if (!permit.errorMessage().isEmpty() && permit.errorMessage().isBlank()) {
+      throw new IllegalArgumentException("errorMessage must not be blank");
     }
   }
 
@@ -154,7 +194,11 @@ final class AgentPermitMethodPolicy {
     return value;
   }
 
-  private static GateDecision denied(String reasonCode) {
-    return new GateDecision(false, reasonCode);
+  private GateDecision denied(String reasonCode) {
+    return new GateDecision(false, annotationReason(reasonCode));
+  }
+
+  private String annotationReason(String defaultReasonCode) {
+    return permit.errorCode().isEmpty() ? defaultReasonCode : permit.errorCode();
   }
 }
