@@ -17,11 +17,16 @@ import io.github.mat973252.agentpermit.core.ToolEffect;
 import io.github.mat973252.agentpermit.execution.InMemoryResultIdempotencyGuard;
 import io.github.mat973252.agentpermit.execution.ResultDecisionPipeline;
 import io.github.mat973252.agentpermit.springai.GuardedToolCallback;
+import io.github.mat973252.agentpermit.springai.SpringAiToolContextKeys;
 import io.github.mat973252.agentpermit.springai.SpringAiToolContract;
+import io.github.mat973252.agentpermit.springai.TrustedToolContextResolver;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.NoUniqueBeanDefinitionException;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.definition.ToolDefinition;
 
 class AgentPermitSpringAiAutoConfigurationTest {
@@ -81,6 +86,38 @@ class AgentPermitSpringAiAutoConfigurationTest {
   }
 
   @Test
+  void appliesUniqueTrustedContextResolverToAutoConfiguredCallback() {
+    TrustedToolContextResolver contextResolver =
+        supplied ->
+            new ToolContext(
+                Map.of(
+                    SpringAiToolContextKeys.PRINCIPAL_ID,
+                    "authenticated-user",
+                    SpringAiToolContextKeys.TENANT_ID,
+                    "tenant-a",
+                    SpringAiToolContextKeys.ENVIRONMENT,
+                    "production",
+                    SpringAiToolContextKeys.IDEMPOTENCY_KEY,
+                    "request-42"));
+
+    contextRunner
+        .withBean(ToolDefinition.class, () -> definition("http.request"))
+        .withBean(SpringAiToolContract.class, () -> contract("http.request"))
+        .withBean(ResultDecisionPipeline.class, AgentPermitSpringAiAutoConfigurationTest::pipeline)
+        .withBean(TrustedToolContextResolver.class, () -> contextResolver)
+        .run(
+            context -> {
+              var callback = context.getBean(GuardedToolCallback.class);
+              var result =
+                  callback.call(
+                      "{\"uri\":\"https://api.example.com/orders\"}",
+                      new ToolContext(Map.of()));
+
+              assertTrue(result.contains("\"outcome\":\"EXECUTED\""));
+            });
+  }
+
+  @Test
   void failsWhenToolContractIsAmbiguous() {
     contextRunner
         .withBean(ToolDefinition.class, () -> definition("http.request"))
@@ -106,8 +143,13 @@ class AgentPermitSpringAiAutoConfigurationTest {
 
     assertNotNull(resource);
     try (resource) {
-      var content = new String(resource.readAllBytes()).strip();
-      assertEquals(AgentPermitSpringAiAutoConfiguration.class.getName(), content);
+      var autoConfigurations =
+          new String(resource.readAllBytes()).lines().filter(line -> !line.isBlank()).toList();
+      assertEquals(
+          List.of(
+              AgentPermitSpringSecurityAutoConfiguration.class.getName(),
+              AgentPermitSpringAiAutoConfiguration.class.getName()),
+          autoConfigurations);
     }
   }
 

@@ -100,7 +100,7 @@ The lower-level API remains available when metadata is supplied dynamically. App
 ToolCallback callback = new GuardedToolCallback(definition, pipeline, contract);
 ```
 
-The adapter maps model-provided flat JSON arguments to `ToolInvocation`. Principal, tenant, environment, optional approval ID, and the required idempotency key are read only from trusted `ToolContext` entries named by `SpringAiToolContextKeys`; model arguments using those names are discarded. Every external side effect remains inside the injected pipeline.
+The adapter maps model-provided flat JSON arguments to `ToolInvocation`. Principal, tenant, environment, optional approval ID, and the required idempotency key are read only from application-controlled `ToolContext` entries named by `SpringAiToolContextKeys`; model arguments using those names are discarded. Applications using the lower-level API must never copy untrusted request or model fields into that context. Every external side effect remains inside the injected pipeline.
 
 The callback returns `{"outcome":"...","reasonCode":"...","output":"..."}` after successful execution. Non-executed decisions omit `output`. The result-bearing pipeline caches the exact string output for idempotent retries while audit events keep only decision metadata. The adapter itself performs no bean discovery, property binding, identity resolution, or auto-configuration. Acceptance tests cover public construction, trusted mapping, low-risk output, approval and resume, SSRF denial, invalid context, failure isolation, and idempotent retry.
 
@@ -117,6 +117,19 @@ Spring Boot 4 applications can depend on the convenience starter:
 ```
 
 The application must provide exactly one `ToolDefinition`, `SpringAiToolContract`, and fully configured `ResultDecisionPipeline`. The auto-configuration then creates one `GuardedToolCallback`. It backs off when any input is missing or when the application already provides that callback. Ambiguous inputs fail normal Spring injection instead of choosing silently.
+
+When Spring Security is present in the application, it can opt into trusted principal, tenant, and environment propagation by declaring one resolver. The starter keeps this integration optional, so the application must already provide its Spring Security dependency:
+
+```java
+@Bean
+SpringSecurityTenantEnvironmentResolver agentPermitTenantEnvironment() {
+  return authentication ->
+      new SpringSecurityTenantEnvironmentResolver.TenantEnvironment(
+          tenantContext.requiredTenantId(), deploymentEnvironment);
+}
+```
+
+The bridge snapshots the current authenticated, non-anonymous principal and lets the application resolve tenant and environment from its own trusted state. These three values replace any supplied `ToolContext` identity values; approval and idempotency metadata are preserved. Missing authentication, blank principal, or invalid resolver output fails closed as `SPRING_AI_CONTEXT_INVALID` before execution. No tenant or environment is guessed. If a callback runs on another thread, the application must use Spring Security's context-propagation facilities; a missing context is denied.
 
 The starter does not invent policies, executors, approval services, identity, tenant data, or permissive defaults. These security-sensitive dependencies remain explicit application beans.
 

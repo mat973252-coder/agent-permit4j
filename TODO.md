@@ -45,7 +45,7 @@ The backlog is ordered by proof of value. Each item includes an observable accep
 - [ ] Implement the Playground web UI: conversation, execution timeline, approval detail, audit, policy explanation, and replay view.
   - [x] Add an offline static wireframe with synthetic fixture JSON and clickable approval/replay views.
   - [ ] Connect the UI to live decision, approval, audit, and replay APIs.
-- [ ] Add Spring Security principal resolution and tenant/environment propagation.
+- [x] Add Spring Security principal resolution and tenant/environment propagation.
 
 Acceptance: a Spring AI sample can request a tool, pause for persisted approval, resume once, and expose a complete audit timeline.
 

@@ -19,6 +19,7 @@ public final class GuardedToolCallback implements ToolCallback {
   private final ToolDefinition definition;
   private final ResultDecisionPipeline pipeline;
   private final SpringAiInvocationMapper mapper;
+  private final TrustedToolContextResolver contextResolver;
   private final Function<String, String> errorMessageResolver;
   private final JsonHelper json = new JsonHelper();
 
@@ -26,16 +27,26 @@ public final class GuardedToolCallback implements ToolCallback {
       ToolDefinition definition,
       ResultDecisionPipeline pipeline,
       SpringAiToolContract contract) {
-    this(definition, pipeline, contract, reasonCode -> null);
+    this(definition, pipeline, contract, supplied -> supplied, reasonCode -> null);
+  }
+
+  public GuardedToolCallback(
+      ToolDefinition definition,
+      ResultDecisionPipeline pipeline,
+      SpringAiToolContract contract,
+      TrustedToolContextResolver contextResolver) {
+    this(definition, pipeline, contract, contextResolver, reasonCode -> null);
   }
 
   private GuardedToolCallback(
       ToolDefinition definition,
       ResultDecisionPipeline pipeline,
       SpringAiToolContract contract,
+      TrustedToolContextResolver contextResolver,
       Function<String, String> errorMessageResolver) {
     this.definition = Objects.requireNonNull(definition, "definition");
     this.pipeline = Objects.requireNonNull(pipeline, "pipeline");
+    this.contextResolver = Objects.requireNonNull(contextResolver, "contextResolver");
     this.errorMessageResolver =
         Objects.requireNonNull(errorMessageResolver, "errorMessageResolver");
     var requiredContract = Objects.requireNonNull(contract, "contract");
@@ -59,7 +70,7 @@ public final class GuardedToolCallback implements ToolCallback {
     var policy = AgentPermitMethodPolicy.from(definition, method);
     var pipeline = new ResultDecisionPipeline(policy.decorate(dependencies));
     return new GuardedToolCallback(
-        definition, pipeline, policy.contract(), policy::errorMessage);
+        definition, pipeline, policy.contract(), supplied -> supplied, policy::errorMessage);
   }
 
   @Override
@@ -75,7 +86,7 @@ public final class GuardedToolCallback implements ToolCallback {
   @Override
   public String call(String toolInput, ToolContext toolContext) {
     try {
-      var mapped = mapper.map(toolInput, toolContext);
+      var mapped = mapper.map(toolInput, resolveContext(toolContext));
       var result =
           pipeline.process(
               mapped.invocation(), mapped.approvalRequestId(), mapped.idempotencyKey());
@@ -84,6 +95,14 @@ public final class GuardedToolCallback implements ToolCallback {
       return decisionJson("DENIED", exception.reasonCode());
     } catch (RuntimeException exception) {
       return decisionJson("FAILED", PIPELINE_FAILED);
+    }
+  }
+
+  private ToolContext resolveContext(ToolContext suppliedContext) {
+    try {
+      return contextResolver.resolve(suppliedContext);
+    } catch (RuntimeException exception) {
+      return null;
     }
   }
 

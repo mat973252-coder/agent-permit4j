@@ -3,7 +3,9 @@ package io.github.mat973252.agentpermit.springai.autoconfigure;
 import io.github.mat973252.agentpermit.execution.ResultDecisionPipeline;
 import io.github.mat973252.agentpermit.springai.GuardedToolCallback;
 import io.github.mat973252.agentpermit.springai.SpringAiToolContract;
+import io.github.mat973252.agentpermit.springai.TrustedToolContextResolver;
 import org.springframework.ai.tool.definition.ToolDefinition;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -20,7 +22,11 @@ public class AgentPermitSpringAiAutoConfiguration {
   GuardedToolCallback agentPermitGuardedToolCallback(
       ToolDefinition definition,
       ResultDecisionPipeline pipeline,
-      SpringAiToolContract contract) {
-    return new GuardedToolCallback(definition, pipeline, contract);
+      SpringAiToolContract contract,
+      ObjectProvider<TrustedToolContextResolver> contextResolverProvider) {
+    var contextResolver = contextResolverProvider.getIfAvailable();
+    return contextResolver == null
+        ? new GuardedToolCallback(definition, pipeline, contract)
+        : new GuardedToolCallback(definition, pipeline, contract, contextResolver);
   }
 }

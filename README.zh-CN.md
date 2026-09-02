@@ -106,7 +106,7 @@ ToolCallback callback = GuardedToolCallback.fromAnnotated(dependencies, method);
 ToolCallback callback = new GuardedToolCallback(definition, pipeline, contract);
 ```
 
-模型提供的扁平 JSON 参数会映射成 `ToolInvocation`。主体、租户、环境、可选审批号和必填幂等键只从 `SpringAiToolContextKeys` 指定的可信 `ToolContext` 项获取；模型参数中的同名字段会被丢弃。所有外部副作用仍只能在注入的管线内发生。
+模型提供的扁平 JSON 参数会映射成 `ToolInvocation`。主体、租户、环境、可选审批号和必填幂等键只从 `SpringAiToolContextKeys` 指定、由应用控制的可信 `ToolContext` 项获取；模型参数中的同名字段会被丢弃。使用底层 API 的应用不得把不可信的请求字段或模型字段复制进该上下文。所有外部副作用仍只能在注入的管线内发生。
 
 成功执行后，回调返回 `{"outcome":"...","reasonCode":"...","output":"..."}`；未执行终态不会携带 `output`。结果型管线会为幂等重试缓存完全相同的字符串输出，但审计事件仍只保存决策元数据。适配器本身不负责 Bean 扫描、属性绑定、身份解析或自动配置。验收测试已覆盖公开构造、可信映射、低风险结果、审批后恢复、SSRF 拒绝、上下文非法、失败隔离和幂等重试。
 
@@ -123,6 +123,19 @@ Spring Boot 4 应用可以直接依赖 starter：
 ```
 
 应用必须各提供一个 `ToolDefinition`、`SpringAiToolContract` 和已经完整配置的 `ResultDecisionPipeline`，自动配置才会创建一个 `GuardedToolCallback`。任一输入缺失时不会装配；应用已经提供该回调时也会退让；同类型输入存在歧义时，由 Spring 按正常注入规则明确失败，不会静默挑选。
+
+应用已经引入 Spring Security 时，只需显式声明一个 resolver，即可启用可信的主体、租户和环境传递。starter 将该集成保持为可选能力，因此 Spring Security 依赖仍由应用自身提供：
+
+```java
+@Bean
+SpringSecurityTenantEnvironmentResolver agentPermitTenantEnvironment() {
+  return authentication ->
+      new SpringSecurityTenantEnvironmentResolver.TenantEnvironment(
+          tenantContext.requiredTenantId(), deploymentEnvironment);
+}
+```
+
+桥接层会快照当前已认证且非匿名的 principal；租户和环境则由应用从自己的可信状态解析。这三个值会覆盖传入 `ToolContext` 中的同名身份字段，审批号和幂等键保持不变。认证缺失、principal 为空或 resolver 返回非法结果时，会在执行前 fail-closed 为 `SPRING_AI_CONTEXT_INVALID`，不会猜测默认租户或环境。若 callback 在另一个线程执行，应用必须使用 Spring Security 的上下文传播设施；上下文丢失时调用会被拒绝。
 
 starter 不会猜测策略、执行器、审批服务、身份、租户信息，也不会提供默认放行配置。这些安全敏感依赖仍必须由应用显式声明。
 
