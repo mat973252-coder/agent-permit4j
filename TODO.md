@@ -47,7 +47,8 @@ The backlog is ordered by proof of value. Each item includes an observable accep
   - [x] Connect the UI to live decision, approval, audit, and replay APIs.
 - [x] Add Spring Security principal resolution and tenant/environment propagation.
 
-Acceptance: a Spring AI sample can request a tool, pause for persisted approval, resume once, and expose a complete audit timeline.
+Acceptance: `PersistedSpringAiAcceptanceTest` proves that a Spring AI tool can pause for
+persisted approval, resume once, and expose a complete persisted audit timeline.
 
 ## P2 — production hardening and ecosystem
 

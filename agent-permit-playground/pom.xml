@@ -11,6 +11,7 @@
     <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-approval</artifactId><version>${project.version}</version></dependency>
     <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-audit</artifactId><version>${project.version}</version></dependency>
     <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-spring-ai</artifactId><version>${project.version}</version></dependency>
+    <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-jdbc</artifactId><version>${project.version}</version><scope>test</scope></dependency>
     <dependency>
       <groupId>org.springframework.ai</groupId>
       <artifactId>spring-ai-model</artifactId>
@@ -20,6 +21,12 @@
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
       <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <version>${h2.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
