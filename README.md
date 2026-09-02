@@ -112,7 +112,7 @@ Spring Boot 4 applications can depend on the convenience starter:
 <dependency>
   <groupId>io.github.mat973252</groupId>
   <artifactId>agent-permit-spring-boot-starter</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.2.0</version>
 </dependency>
 ```
 
@@ -215,7 +215,7 @@ Each case prints its structured outcome, stable reason code, observed mock side-
 
 The Playground web server exposes the execution console and loopback-only live decision, approval, audit, and replay APIs. The three server-defined cases use the production pipeline with in-memory approval, audit, and result-idempotency components plus mock side effects. Selecting **Approve and execute** approves the backend-created request and resumes the exact invocation; concurrent or later retries still produce one mock side effect. Audit and replay endpoints return only the existing safe event view and never invoke the executor. The RAG tab remains a clearly labeled synthetic future-integration example.
 
-Build and install the local snapshot once, then start the Java 21 HTTP server:
+Build and install the local artifacts once, then start the Java 21 HTTP server:
 
 ```bash
 ./mvnw -B -ntp -pl agent-permit-playground -am -DskipTests install

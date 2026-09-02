@@ -118,7 +118,7 @@ Spring Boot 4 应用可以直接依赖 starter：
 <dependency>
   <groupId>io.github.mat973252</groupId>
   <artifactId>agent-permit-spring-boot-starter</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.2.0</version>
 </dependency>
 ```
 
@@ -239,7 +239,7 @@ Linux/macOS：
 
 Playground Web 服务提供执行控制台，以及仅绑定本机 loopback 的实时 decision／approval／audit／replay API。三个服务端固定案例使用生产决策管线、内存审批／审计／结果幂等组件和 mock 副作用。点击“批准并执行”会批准后端生成的 request，并恢复完全相同的调用；并发或后续重试仍只产生一次 mock 副作用。Audit 与 Replay 端点只读取已有安全事件视图，不会调用 executor。RAG 页签仍明确标记为未来集成的合成样例。
 
-首次运行先构建并安装本地 snapshot，再启动 Java 21 HTTP 服务：
+首次运行先构建并安装本地产物，再启动 Java 21 HTTP 服务：
 
 ```powershell
 .\mvnw.cmd -B -ntp -pl agent-permit-playground -am -DskipTests install
