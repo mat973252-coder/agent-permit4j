@@ -36,8 +36,8 @@ The UI must show tool, principal, resource, operation, risk level, stable reason
 ## Implementation order
 
 1. [x] Static clickable wireframe using fixture JSON.
-2. [ ] Live AgentPermit4j decision/approval/audit APIs.
+2. [x] Live AgentPermit4j decision/approval/audit APIs.
 3. [ ] Import a `RagTrace` fixture from RAGContract4j.
 4. [ ] Optional live RAG integration after both libraries have stable contracts.
 
-The static wireframe lives in `agent-permit-playground/src/main/resources/webui`. It uses synthetic data and never contacts an external system. Java 21's `jwebserver` serves it locally without Node.js or another runtime dependency.
+The web UI lives in `agent-permit-playground/src/main/resources/webui`. A Java 21 loopback HTTP server exposes fixed synthetic cases through the production decision pipeline and serves live decision, approval, audit, and replay responses without contacting an external system. The RAG trace remains synthetic until step 3. No Node.js or frontend runtime is required.

@@ -38,6 +38,13 @@
               <mainClass>io.github.mat973252.agentpermit.playground.PlaygroundApplication</mainClass>
             </configuration>
           </execution>
+          <execution>
+            <id>run-web</id>
+            <goals><goal>java</goal></goals>
+            <configuration>
+              <mainClass>io.github.mat973252.agentpermit.playground.PlaygroundWebApplication</mainClass>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
     </plugins>

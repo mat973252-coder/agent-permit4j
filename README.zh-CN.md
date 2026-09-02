@@ -235,17 +235,20 @@ Linux/macOS：
 
 所有场景完成后，进程以状态码 `0` 退出。
 
-### 打开静态 Web UI
+### 打开实时 Web UI
 
-第一版 Web UI 是 fixture 驱动的执行控制台，展示对话、确定性时间线、精确审批详情、审计事件、未来 RAG 集成的合成权限边界样例、策略解释和 replay-safe 视图。点击“查看审批后结果”只会切换到与当前调用完全一致的本地已审批 fixture，并展示一次历史 executor 调用。这一版仅用于静态演示；真实 decision／approval API 接入属于下一切片。
+Playground Web 服务提供执行控制台，以及仅绑定本机 loopback 的实时 decision／approval／audit／replay API。三个服务端固定案例使用生产决策管线、内存审批／审计／结果幂等组件和 mock 副作用。点击“批准并执行”会批准后端生成的 request，并恢复完全相同的调用；并发或后续重试仍只产生一次 mock 副作用。Audit 与 Replay 端点只读取已有安全事件视图，不会调用 executor。RAG 页签仍明确标记为未来集成的合成样例。
 
-在仓库根目录运行 Java 21 自带的静态服务器：
+首次运行先构建并安装本地 snapshot，再启动 Java 21 HTTP 服务：
 
 ```powershell
-jwebserver -b 127.0.0.1 -p 8088 -d agent-permit-playground/src/main/resources/webui
+.\mvnw.cmd -B -ntp -pl agent-permit-playground -am -DskipTests install
+.\mvnw.cmd -f agent-permit-playground\pom.xml exec:java@run-web
 ```
 
-随后打开 `http://127.0.0.1:8088/`。不需要 Node.js、前端依赖安装、数据库或外部服务。
+随后打开 `http://127.0.0.1:8088/`；可用 `-Dagentpermit.playground.port=8089` 修改端口，在 PowerShell 中必须整体写成 `"-Dagentpermit.playground.port=8089"`。不需要 Node.js、前端依赖安装、数据库或外部服务。
+
+服务只监听 loopback，且只接受服务端固定的合成案例。审批端点没有生产身份认证或工作流集成，不能作为真实审批服务对外暴露。
 
 ## 完整构建
 
@@ -266,7 +269,7 @@ Linux/macOS：
 - 内存 guard 只保证单进程；Redis 结果 guard 可跨进程协调，但外部副作用与 Redis 完成写入不在同一事务中，且 Redis 数据丢失会破坏保证，因此不宣称无条件 exactly-once；
 - Playground 使用真实决策管线，但副作用端口是内存计数器；
 - 当前内置动态规则覆盖 SQL、受保护文件路径、HTTP／SSRF 和部署场景；
-- Spring AI 适配器已经可复用；starter 只负责从应用显式提供的 definition、pipeline 和 tool contract 装配回调，可信 context 仍由调用方提供；
+- Spring AI 适配器已经可复用；starter 从应用显式提供的 definition、pipeline 和 tool contract 装配回调，并可选地通过 Spring Security bridge 覆盖 principal、tenant 与 environment；
 - JDBC 审批请求、只追加审计时间线和 Redis 结果幂等已经实现；审批消费只适用于提供稳定幂等键的已审批结果型调用，内存 guard 为单实例绑定，Redis guard 为跨进程绑定；
 - 结果输出按字符串处理，可由内存或 Redis 幂等组件缓存，但不会写入审计事件；
 - Redis 记录当前不设 TTL；保留策略、分片扩展与不可恢复故障处置属于后续版本。

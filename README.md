@@ -211,17 +211,20 @@ On Windows:
 
 Each case prints its structured outcome, stable reason code, observed mock side-effect count, and audit stages. The process exits with code `0` after all scenarios complete.
 
-### Open the static Web UI
+### Open the live Web UI
 
-The first Web UI slice is a fixture-driven execution console. It shows the conversation, deterministic timeline, exact approval details, audit events, a synthetic future-RAG boundary fixture, policy explanation, and replay-safe view. Selecting **View approved result** only switches to the matching local fixture and shows one historical executor call. It is a static demonstration; live decision and approval APIs remain a later slice.
+The Playground web server exposes the execution console and loopback-only live decision, approval, audit, and replay APIs. The three server-defined cases use the production pipeline with in-memory approval, audit, and result-idempotency components plus mock side effects. Selecting **Approve and execute** approves the backend-created request and resumes the exact invocation; concurrent or later retries still produce one mock side effect. Audit and replay endpoints return only the existing safe event view and never invoke the executor. The RAG tab remains a clearly labeled synthetic future-integration example.
 
-From the repository root, use the static server bundled with Java 21:
+Build and install the local snapshot once, then start the Java 21 HTTP server:
 
 ```bash
-jwebserver -b 127.0.0.1 -p 8088 -d agent-permit-playground/src/main/resources/webui
+./mvnw -B -ntp -pl agent-permit-playground -am -DskipTests install
+./mvnw -f agent-permit-playground/pom.xml exec:java@run-web
 ```
 
-Then open `http://127.0.0.1:8088/`. No Node.js, frontend dependency installation, database, or external service is required.
+On Windows, use `mvnw.cmd` and `agent-permit-playground\pom.xml`. Then open `http://127.0.0.1:8088/`. Override the port with `-Dagentpermit.playground.port=8089`; PowerShell requires the whole property to be quoted as `"-Dagentpermit.playground.port=8089"`. No Node.js, frontend dependency installation, database, or external service is required.
+
+The server binds only to loopback and accepts only fixed synthetic demo cases. Its approval endpoint has no production authentication or workflow integration; do not expose it as a real approval service.
 
 ## Build
 

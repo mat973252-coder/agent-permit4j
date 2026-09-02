@@ -166,6 +166,8 @@ The convenience modules still define no policies, executors, approval services, 
 
 The Maven `verify` phase runs the CLI after tests. The printed side-effect count comes from the injected mock `ToolExecutor`, while decisions, reasons, approval checks, idempotency, and timeline stages come from the production modules. No output is precomputed and no external system is contacted.
 
+The optional Playground web process uses the JDK HTTP server bound only to loopback. Its decision endpoint accepts only server-defined synthetic case IDs; it never accepts browser-supplied principal, tenant, environment, risk, normalized arguments, or fingerprints as authority. One long-lived runtime owns the real result pipeline, in-memory approval service, audit log, idempotency guard, and per-case mock counters. Approval IDs are generated and bound on the backend, and approval resumes the same stored invocation with a stable idempotency key. Audit and replay endpoints expose only ordered safe event fields and do not receive a pipeline or executor. This process deliberately has no production authentication, persistence, or external connectors and must not be exposed as an approval service.
+
 ## Implementation boundary
 
 The first vertical slice used Java policies and in-memory stores to prove semantics. P1 adds framework and storage adapters without moving framework, JDBC, or configuration types into core.

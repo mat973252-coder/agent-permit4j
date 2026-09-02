@@ -24,7 +24,7 @@ class WebUiResourceTest {
         () -> assertTrue(html.contains("id=\"decision-title\"")),
         () -> assertTrue(html.contains("id=\"decision-copy\"")),
         () -> assertTrue(html.contains("class=\"control-status\"")),
-        () -> assertTrue(html.contains("本地演示")),
+        () -> assertTrue(html.contains("本地实时演示")),
         () -> assertTrue(html.contains("data-tab=\"tool-calls\"")),
         () -> assertTrue(html.contains("data-tab=\"approvals\"")),
         () -> assertTrue(html.contains("data-tab=\"audit\"")),
@@ -32,41 +32,30 @@ class WebUiResourceTest {
         () -> assertTrue(html.contains("data-tab=\"policies\"")),
         () -> assertTrue(html.contains("data-tab=\"replay\"")),
         () -> assertTrue(html.contains("aria-controls=\"inspector-content\"")),
-        () -> assertTrue(html.contains("查看审批后结果")),
+        () -> assertTrue(html.contains("批准并执行")),
         () -> assertTrue(html.contains("RAG trace (fixture)")),
         () -> assertTrue(html.contains("Executor calls")),
         () -> assertFalse(html.contains("批准当前指纹")),
         () -> assertTrue(css.contains("@media")),
         () -> assertTrue(css.contains("--canvas")),
-        () -> assertTrue(script.contains("fetch(\"fixtures.json\")")),
+        () -> assertTrue(script.contains("/api/playground/cases")),
+        () -> assertTrue(script.contains("/api/playground/decisions/")),
+        () -> assertTrue(script.contains("/api/playground/approvals/")),
+        () -> assertTrue(script.contains("/api/playground/audit/")),
+        () -> assertTrue(script.contains("/api/playground/replay/")),
         () -> assertTrue(script.contains("APPROVAL_REQUIRED: {")),
         () -> assertTrue(script.contains("需要人工确认")),
-        () -> assertTrue(script.contains("approvedCaseId")),
+        () -> assertTrue(script.contains("approvalRequestId")),
         () -> assertTrue(script.contains("ArrowRight")),
-        () -> assertTrue(script.contains("FIXTURE_LOAD_FAILED")),
+        () -> assertTrue(script.contains("PLAYGROUND_API_UNAVAILABLE")),
         () -> assertTrue(script.contains("Historical executor calls")),
         () -> assertFalse(script.contains("innerHTML")),
         () -> assertFalse(html.contains("https://")));
   }
 
   @Test
-  void fixtureDataCoversExecuteApprovalDenyAndReplayStates() {
-    var fixture = resource("webui/fixtures.json");
-
-    assertAll(
-        () -> assertTrue(fixture.contains("\"id\": \"messaging-claimed\"")),
-        () -> assertTrue(fixture.contains("\"id\": \"messaging-approved\"")),
-        () -> assertTrue(fixture.contains("\"id\": \"http-ssrf-denied\"")),
-        () -> assertTrue(fixture.contains("\"outcome\": \"APPROVAL_REQUIRED\"")),
-        () -> assertTrue(fixture.contains("\"outcome\": \"EXECUTED\"")),
-        () -> assertTrue(fixture.contains("\"outcome\": \"DENIED\"")),
-        () -> assertTrue(fixture.contains("\"normalizedArguments\"")),
-        () -> assertTrue(fixture.contains("\"fingerprint\"")),
-        () -> assertTrue(fixture.contains("\"policyVersion\"")),
-        () -> assertTrue(fixture.contains("\"sideEffectCount\"")),
-        () -> assertTrue(fixture.contains("\"safe\": true")),
-        () -> assertTrue(fixture.contains("\"executed\": false")),
-        () -> assertTrue(fixture.contains("\"RAG_CROSS_TENANT_BLOCKED\"")));
+  void liveUiDoesNotReferenceSyntheticDecisionFixture() {
+    assertFalse(resource("webui/app.js").contains("fixtures.json"));
   }
 
   private static String resource(String path) {

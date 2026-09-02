@@ -29,7 +29,7 @@ const outcomeCopy = {
   }
 };
 
-let fixtures = [];
+let cases = [];
 let currentFixture = null;
 let activeTab = "tool-calls";
 
@@ -40,13 +40,9 @@ async function initialize() {
   ui.caseSelect.addEventListener("change", () => selectCase(ui.caseSelect.value));
   ui.approveButton.addEventListener("click", approveCurrentCase);
   try {
-    const response = await fetch("fixtures.json");
-    if (!response.ok) {
-      throw new Error("fixture request failed");
-    }
-    fixtures = await response.json();
+    cases = await requestJson("/api/playground/cases");
     populateCaseSelect();
-    selectCase(fixtures[0].id);
+    await selectCase(cases[0].id);
   } catch (error) {
     showLoadError();
   }
@@ -59,7 +55,7 @@ function bindTabs() {
   });
 }
 
-function activateTab(tab, focus = false) {
+async function activateTab(tab, focus = false) {
   activeTab = tab.dataset.tab;
   ui.tabs.forEach((item) => {
     const selected = item === tab;
@@ -70,7 +66,12 @@ function activateTab(tab, focus = false) {
   if (focus) {
     tab.focus();
   }
-  renderInspector();
+  try {
+    await refreshEvidence();
+    renderInspector();
+  } catch (error) {
+    showLoadError();
+  }
 }
 
 function handleTabKey(event) {
@@ -93,31 +94,38 @@ function showLoadError() {
   ui.outcomeBadge.textContent = "LOAD_FAILED";
   ui.outcomeBadge.dataset.outcome = "DENIED";
   ui.decisionHero.dataset.outcome = "DENIED";
-  ui.reasonCode.textContent = "FIXTURE_LOAD_FAILED";
-  ui.decisionTitle.textContent = "演示数据加载失败";
-  ui.decisionCopy.textContent = "请通过项目 README 中的本地预览命令重新打开页面。";
+  ui.reasonCode.textContent = "PLAYGROUND_API_UNAVAILABLE";
+  ui.decisionTitle.textContent = "实时演示 API 不可用";
+  ui.decisionCopy.textContent = "请通过项目 README 中的 Playground 启动命令重新打开页面。";
   ui.caseSelect.disabled = true;
   ui.error.hidden = false;
 }
 
 function populateCaseSelect() {
-  fixtures.forEach((fixture) => {
-    const option = element("option", "", `${fixture.scenario} · ${fixture.title}`);
-    option.value = fixture.id;
+  cases.forEach((item) => {
+    const option = element("option", "", `${item.scenario} · ${item.title}`);
+    option.value = item.id;
     ui.caseSelect.append(option);
   });
 }
 
-function selectCase(id) {
-  const fixture = fixtures.find((item) => item.id === id);
-  if (!fixture) {
+async function selectCase(id) {
+  if (!cases.some((item) => item.id === id)) {
     return;
   }
-  currentFixture = fixture;
-  ui.caseSelect.value = fixture.id;
-  renderSummary(fixture);
-  renderConversation(fixture.conversation);
-  renderTimeline(fixture.timeline);
+  try {
+    currentFixture = await requestJson(`/api/playground/decisions/${id}`, { method: "POST" });
+    ui.caseSelect.value = currentFixture.id;
+    renderCurrentCase();
+  } catch (error) {
+    showLoadError();
+  }
+}
+
+function renderCurrentCase() {
+  renderSummary(currentFixture);
+  renderConversation(currentFixture.conversation);
+  renderTimeline(currentFixture.timeline);
   renderInspector();
 }
 
@@ -133,7 +141,8 @@ function renderSummary(fixture) {
   ui.decisionCopy.textContent = decision.copy;
   ui.reasonCode.textContent = fixture.reasonCode;
   ui.sideEffectCount.textContent = String(fixture.sideEffectCount);
-  ui.approveButton.hidden = !fixture.approvedCaseId;
+  ui.approveButton.hidden =
+      fixture.outcome !== "APPROVAL_REQUIRED" || !fixture.approvalRequestId;
 }
 
 function renderConversation(messages) {
@@ -295,11 +304,45 @@ function renderReplay(fixture) {
   return container;
 }
 
-function approveCurrentCase() {
-  if (currentFixture && currentFixture.approvedCaseId) {
-    selectCase(currentFixture.approvedCaseId);
-    activateTab(ui.tabs.find((tab) => tab.dataset.tab === "audit"));
+async function approveCurrentCase() {
+  if (!currentFixture?.approvalRequestId) {
+    return;
   }
+  ui.approveButton.disabled = true;
+  try {
+    currentFixture = await requestJson(
+        `/api/playground/approvals/${currentFixture.approvalRequestId}`,
+        { method: "POST" });
+    renderCurrentCase();
+    await activateTab(ui.tabs.find((tab) => tab.dataset.tab === "audit"));
+  } catch (error) {
+    showLoadError();
+  } finally {
+    ui.approveButton.disabled = false;
+  }
+}
+
+async function refreshEvidence() {
+  if (!currentFixture?.timelineId || !["audit", "replay"].includes(activeTab)) {
+    return;
+  }
+  const path = activeTab === "audit"
+      ? `/api/playground/audit/${currentFixture.timelineId}`
+      : `/api/playground/replay/${currentFixture.timelineId}`;
+  const evidence = await requestJson(path);
+  if (activeTab === "audit") {
+    currentFixture.audit = evidence.events;
+  } else {
+    currentFixture.replay = { ...currentFixture.replay, ...evidence };
+  }
+}
+
+async function requestJson(path, options = {}) {
+  const response = await fetch(path, options);
+  if (!response.ok) {
+    throw new Error(`request failed: ${response.status}`);
+  }
+  return response.json();
 }
 
 function detailGrid(entries) {

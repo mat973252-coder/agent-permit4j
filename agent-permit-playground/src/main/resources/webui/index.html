@@ -19,8 +19,8 @@
           </div>
         </div>
         <div class="header-meta">
-          <span class="control-status"><span aria-hidden="true"></span>本地演示</span>
-          <p>Fixture 数据 · 不连接外部系统</p>
+          <span class="control-status"><span aria-hidden="true"></span>本地实时演示</span>
+          <p>真实决策管线 · Mock 副作用 · 不连接外部系统</p>
         </div>
       </header>
 
@@ -59,7 +59,7 @@
                 <h2>决策路径</h2>
               </div>
               <button id="approve-button" class="approve-button" type="button" hidden>
-                查看审批后结果
+                批准并执行
               </button>
             </div>
             <div class="decision-hero">
@@ -68,7 +68,7 @@
                 <div>
                   <p class="section-kicker">POLICY VERDICT</p>
                   <h3 id="decision-title">正在载入决策</h3>
-                  <p id="decision-copy" class="decision-copy">正在读取本地演示数据。</p>
+                  <p id="decision-copy" class="decision-copy">正在请求本地决策 API。</p>
                 </div>
               </div>
               <div class="decision-summary">
@@ -107,13 +107,13 @@
 
         <section id="error-state" class="error-state" hidden>
           <strong>无法加载演示数据</strong>
-          <span>请通过 README 中的 jwebserver 命令打开本页面。</span>
+          <span>请通过 README 中的 Playground 启动命令打开本页面。</span>
         </section>
       </main>
 
       <footer>
-        <span>Fixture-driven preview · no external systems contacted</span>
-        <span>AgentPermit4j · Java 21 · offline-safe</span>
+        <span>Live AgentPermit4j decisions · no external systems contacted</span>
+        <span>AgentPermit4j · Java 21 · loopback-only</span>
       </footer>
     </div>
   </body>
