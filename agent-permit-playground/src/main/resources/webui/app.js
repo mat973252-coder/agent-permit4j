@@ -2,103 +2,66 @@ const ui = {
   caseSelect: document.querySelector("#case-select"),
   outcomeBadge: document.querySelector("#outcome-badge"),
   conversation: document.querySelector("#conversation"),
-  timeline: document.querySelector("#timeline"),
-  decisionTitle: document.querySelector("#decision-title"),
-  decisionCopy: document.querySelector("#decision-copy"),
-  decisionHero: document.querySelector(".decision-hero"),
-  reasonCode: document.querySelector("#reason-code"),
-  sideEffectCount: document.querySelector("#side-effect-count"),
+  runStatus: document.querySelector("#run-status"),
+  runId: document.querySelector("#run-id"),
+  runtimeContext: document.querySelector("#runtime-context"),
+  approvalCheckpoint: document.querySelector("#approval-checkpoint"),
+  approvalQuestion: document.querySelector("#approval-question"),
+  approvalMetadata: document.querySelector("#approval-metadata"),
   approveButton: document.querySelector("#approve-button"),
-  inspector: document.querySelector("#inspector-content"),
-  error: document.querySelector("#error-state"),
-  tabs: [...document.querySelectorAll("[data-tab]")]
+  viewDetailsButton: document.querySelector("#view-details-button"),
+  runDetails: document.querySelector("#run-details"),
+  detailsContent: document.querySelector("#details-content"),
+  error: document.querySelector("#error-state")
 };
 
 const outcomeCopy = {
   APPROVAL_REQUIRED: {
     title: "需要人工确认",
-    copy: "风险策略已暂停执行；只有与当前调用指纹绑定的后端审批才能继续。"
+    copy: "风险策略已暂停执行，批准只对当前调用指纹生效。"
   },
   EXECUTED: {
-    title: "演示执行已完成",
-    copy: "授权、风险与审批校验均已通过，执行器在受控边界内仅调用一次。"
+    title: "Agent 已安全完成任务",
+    copy: "策略已放行，受控执行器完成一次调用。"
   },
   DENIED: {
-    title: "请求已被阻断",
-    copy: "策略在副作用发生前终止调用，并返回可审计的稳定原因码。"
+    title: "Agent 已停止本次运行",
+    copy: "策略在副作用发生前阻断了工具调用。"
   }
+};
+
+const runStatusCopy = {
+  RUNNING: "ACTIVE RUN",
+  RESUMING: "ACTIVE RUN",
+  APPROVAL_REQUIRED: "ACTIVE RUN",
+  EXECUTED: "COMPLETED",
+  DENIED: "BLOCKED",
+  LOAD_FAILED: "ERROR"
 };
 
 let cases = [];
 let currentFixture = null;
-let activeTab = "tool-calls";
+let selectionSequence = 0;
+let evidenceTimelineId = null;
 
 document.addEventListener("DOMContentLoaded", initialize);
 
 async function initialize() {
-  bindTabs();
   ui.caseSelect.addEventListener("change", () => selectCase(ui.caseSelect.value));
   ui.approveButton.addEventListener("click", approveCurrentCase);
+  ui.viewDetailsButton.addEventListener("click", openRunDetails);
+  ui.runDetails.addEventListener("toggle", loadDetailsWhenOpened);
+  document.addEventListener("keydown", handleShortcut);
   try {
     cases = await requestJson("/api/playground/cases");
+    if (!Array.isArray(cases) || cases.length === 0) {
+      throw new Error("no playground cases available");
+    }
     populateCaseSelect();
     await selectCase(cases[0].id);
   } catch (error) {
     showLoadError();
   }
-}
-
-function bindTabs() {
-  ui.tabs.forEach((tab) => {
-    tab.addEventListener("click", () => activateTab(tab));
-    tab.addEventListener("keydown", handleTabKey);
-  });
-}
-
-async function activateTab(tab, focus = false) {
-  activeTab = tab.dataset.tab;
-  ui.tabs.forEach((item) => {
-    const selected = item === tab;
-    item.setAttribute("aria-selected", selected ? "true" : "false");
-    item.tabIndex = selected ? 0 : -1;
-  });
-  ui.inspector.setAttribute("aria-labelledby", tab.id);
-  if (focus) {
-    tab.focus();
-  }
-  try {
-    await refreshEvidence();
-    renderInspector();
-  } catch (error) {
-    showLoadError();
-  }
-}
-
-function handleTabKey(event) {
-  const currentIndex = ui.tabs.indexOf(event.currentTarget);
-  const lastIndex = ui.tabs.length - 1;
-  const targets = {
-    ArrowRight: currentIndex === lastIndex ? 0 : currentIndex + 1,
-    ArrowLeft: currentIndex === 0 ? lastIndex : currentIndex - 1,
-    Home: 0,
-    End: lastIndex
-  };
-  if (targets[event.key] === undefined) {
-    return;
-  }
-  event.preventDefault();
-  activateTab(ui.tabs[targets[event.key]], true);
-}
-
-function showLoadError() {
-  ui.outcomeBadge.textContent = "LOAD_FAILED";
-  ui.outcomeBadge.dataset.outcome = "DENIED";
-  ui.decisionHero.dataset.outcome = "DENIED";
-  ui.reasonCode.textContent = "PLAYGROUND_API_UNAVAILABLE";
-  ui.decisionTitle.textContent = "实时演示 API 不可用";
-  ui.decisionCopy.textContent = "请通过项目 README 中的 Playground 启动命令重新打开页面。";
-  ui.caseSelect.disabled = true;
-  ui.error.hidden = false;
 }
 
 function populateCaseSelect() {
@@ -113,228 +76,330 @@ async function selectCase(id) {
   if (!cases.some((item) => item.id === id)) {
     return;
   }
+  const requestSequence = ++selectionSequence;
+  setRunStatus("RUNNING");
+  hidePendingApproval();
+  ui.error.hidden = true;
   try {
-    currentFixture = await requestJson(`/api/playground/decisions/${id}`, { method: "POST" });
-    ui.caseSelect.value = currentFixture.id;
+    const fixture = await requestJson(`/api/playground/decisions/${id}`, { method: "POST" });
+    if (requestSequence !== selectionSequence) {
+      return;
+    }
+    currentFixture = fixture;
+    evidenceTimelineId = null;
+    ui.runDetails.open = false;
+    ui.caseSelect.value = fixture.id;
     renderCurrentCase();
   } catch (error) {
-    showLoadError();
+    if (requestSequence === selectionSequence) {
+      showLoadError();
+    }
   }
 }
 
 function renderCurrentCase() {
-  renderSummary(currentFixture);
-  renderConversation(currentFixture.conversation);
-  renderTimeline(currentFixture.timeline);
-  renderInspector();
+  renderHeader(currentFixture);
+  renderTranscript(currentFixture);
+  renderApproval(currentFixture);
+  renderRunDetails(currentFixture);
 }
 
-function renderSummary(fixture) {
-  const decision = outcomeCopy[fixture.outcome] || {
-    title: fixture.outcome,
-    copy: "查看下方时间线和证据，核对本次调用的完整决策过程。"
-  };
+function renderHeader(fixture) {
   ui.outcomeBadge.textContent = fixture.outcome;
   ui.outcomeBadge.dataset.outcome = fixture.outcome;
-  ui.decisionHero.dataset.outcome = fixture.outcome;
-  ui.decisionTitle.textContent = decision.title;
-  ui.decisionCopy.textContent = decision.copy;
-  ui.reasonCode.textContent = fixture.reasonCode;
-  ui.sideEffectCount.textContent = String(fixture.sideEffectCount);
-  ui.approveButton.hidden =
-      fixture.outcome !== "APPROVAL_REQUIRED" || !fixture.approvalRequestId;
+  ui.runId.textContent = `run=${fixture.timelineId}`;
+  ui.runtimeContext.textContent =
+      `workspace=${fixture.invocation.tenant} · principal=${fixture.invocation.principal} · ` +
+      `tenant=${fixture.invocation.tenant} · env=${fixture.invocation.environment}`;
+  setRunStatus(fixture.outcome);
 }
 
-function renderConversation(messages) {
+function renderTranscript(fixture) {
   ui.conversation.replaceChildren();
-  messages.forEach((message) => {
-    const article = element("article", `message ${message.role}`);
-    article.append(element("span", "message-role", message.label || message.role));
-    article.append(element("p", "", message.text));
-    ui.conversation.append(article);
+  fixture.conversation.forEach((message, index) => {
+    ui.conversation.append(renderMessage(message, index + 1));
   });
-}
-
-function renderTimeline(events) {
-  ui.timeline.replaceChildren();
-  events.forEach((event) => {
-    const item = element("li", "timeline-item");
-    item.append(element("span", "timeline-sequence", event.sequence));
-    item.append(element("span", "timeline-stage", event.stage));
-    item.append(element("code", "timeline-reason", event.reasonCode));
-    item.append(statusPill(event.status));
-    ui.timeline.append(item);
-  });
-}
-
-function renderInspector() {
-  if (!currentFixture) {
-    return;
+  const toolStep = fixture.conversation.length + 1;
+  ui.conversation.append(renderToolInvocation(fixture, toolStep));
+  if (fixture.outcome !== "APPROVAL_REQUIRED") {
+    ui.conversation.append(renderResult(fixture, toolStep + 1));
   }
-  ui.inspector.replaceChildren();
-  const renderers = {
-    "tool-calls": renderToolCall,
-    approvals: renderApproval,
-    audit: renderAudit,
-    "rag-trace": renderRagTrace,
-    policies: renderPolicies,
-    replay: renderReplay
-  };
-  ui.inspector.append(renderers[activeTab](currentFixture));
 }
 
-function renderToolCall(fixture) {
-  const container = element("div");
-  container.append(
-      detailGrid([
-        ["Tool", fixture.invocation.tool],
-        ["Principal", fixture.invocation.principal],
-        ["Tenant / env", `${fixture.invocation.tenant} / ${fixture.invocation.environment}`],
-        ["Operation", fixture.invocation.operation],
-        ["Resource", fixture.invocation.resource],
-        ["Outcome", fixture.outcome],
-        ["Reason", fixture.reasonCode],
-        ["Executor calls", fixture.sideEffectCount]
-      ]));
-  container.append(
-      codeGrid([
-        ["Proposed arguments", fixture.invocation.arguments],
-        ["Normalized arguments", fixture.invocation.normalizedArguments]
-      ]));
-  return container;
+function renderMessage(message, step) {
+  const entry = element("article", `tui-entry ${message.role}`);
+  entry.append(element("span", "step-index", stepLabel(step)));
+  entry.append(element("span", "entry-glyph", message.role === "user" ? "›" : "●"));
+  const content = element("div", "entry-content");
+  content.append(element("span", "entry-label", message.label || message.role));
+  content.append(element("p", "", message.text));
+  entry.append(content);
+  return entry;
+}
+
+function renderToolInvocation(fixture, step) {
+  const invocation = fixture.invocation;
+  const entry = element("article", "tui-entry tool");
+  entry.append(element("span", "step-index", stepLabel(step)));
+  entry.append(element("span", "entry-glyph", "●"));
+  const content = element("div", "entry-content");
+  content.append(element("span", "entry-label", "Tool"));
+
+  const toolCall = element("div", "tui-tool-call tool-table");
+  const title = element("div", "tool-table-title");
+  title.append(element("span", "", "Tool Call:"));
+  title.append(element("strong", "tool-name", invocation.tool));
+  toolCall.append(title);
+  toolCall.append(toolLine("Operation", invocation.operation));
+  toolCall.append(toolLine("Resource", invocation.resource));
+  const argumentsView = element("details", "tool-arguments tool-table-row");
+  argumentsView.append(element("summary", "", "arguments"));
+  argumentsView.append(codeBlock(invocation.normalizedArguments));
+  toolCall.append(argumentsView);
+  content.append(toolCall);
+  entry.append(content);
+  return entry;
+}
+
+function renderResult(fixture, step) {
+  const copy = outcomeCopy[fixture.outcome] || {
+    title: fixture.outcome,
+    copy: "本次运行已返回稳定决策结果。"
+  };
+  const entry = element("article", `tui-entry result ${fixture.outcome.toLowerCase()}`);
+  entry.append(element("span", "step-index", stepLabel(step)));
+  entry.append(element("span", "entry-glyph", fixture.outcome === "EXECUTED" ? "✓" : "×"));
+  const content = element("div", "entry-content");
+  content.append(element("span", "entry-label", "Result"));
+  content.append(element("strong", "result-title", copy.title));
+  content.append(element("p", "", copy.copy));
+  content.append(element(
+      "code",
+      "result-code",
+      `reason=${fixture.reasonCode} · executor_calls=${fixture.sideEffectCount}`));
+  entry.append(content);
+  return entry;
 }
 
 function renderApproval(fixture) {
-  const approval = fixture.approval;
-  const container = element("div");
-  container.append(
-      detailGrid([
-        ["Status", approval.status],
-        ["Risk", approval.riskLevel],
-        ["Tool", approval.tool],
-        ["Principal", approval.principal],
-        ["Resource", approval.resource],
-        ["Operation", approval.operation],
-        ["Expiry", approval.expiry || "Not created"],
-        ["Policy version", approval.policyVersion]
-      ]));
-  container.append(codeGrid([["Normalized arguments", approval.normalizedArguments]]));
-  container.append(codeCard("Invocation fingerprint", approval.fingerprint));
-  return container;
-}
-
-function renderAudit(fixture) {
-  const table = element("table", "audit-table");
-  const head = element("thead");
-  const headRow = element("tr");
-  ["Seq", "Stage", "Status", "Reason code"].forEach((text) => headRow.append(element("th", "", text)));
-  head.append(headRow);
-  table.append(head);
-  const body = element("tbody");
-  fixture.audit.forEach((event) => {
-    const row = element("tr");
-    [event.sequence, event.stage, event.status, event.reasonCode].forEach((value) => row.append(element("td", "mono", value)));
-    body.append(row);
+  const awaitsApproval =
+      fixture.outcome === "APPROVAL_REQUIRED" && Boolean(fixture.approvalRequestId);
+  ui.approvalCheckpoint.hidden = !awaitsApproval;
+  if (!awaitsApproval) {
+    return;
+  }
+  ui.approvalQuestion.textContent = `Approval required: ${fixture.invocation.tool}`;
+  const approvalStep = stepLabel(fixture.conversation.length + 2);
+  ui.approvalCheckpoint.querySelectorAll(".stage-line .step-index").forEach((node) => {
+    node.textContent = approvalStep;
   });
-  table.append(body);
-  return table;
+  ui.approvalMetadata.replaceChildren();
+  appendDefinition(ui.approvalMetadata, "resource", fixture.invocation.resource);
+  appendDefinition(ui.approvalMetadata, "operation", fixture.invocation.operation);
+  appendDefinition(ui.approvalMetadata, "risk", fixture.riskLevel);
+  appendDefinition(ui.approvalMetadata, "reason", fixture.reasonCode);
+  ui.approveButton.disabled = false;
 }
 
-function renderRagTrace(fixture) {
-  const trace = fixture.ragTrace;
-  const container = element("div");
-  container.append(
-      detailGrid([
-        ["Query", trace.query],
-        ["Tenant", trace.tenant],
-        ["Citations", trace.citations.length],
-        ["Boundary check", trace.failure],
-        ["Data source", "Synthetic fixture · future RAG integration"]
-      ]));
-  const list = element("ul", "document-list");
-  trace.retrievedDocuments.forEach((document) => {
-    const row = element("li", `document-row ${document.decision.toLowerCase()}`);
-    row.append(element("span", "", `${document.id} · ${document.tenant}`));
-    row.append(statusPill(document.decision));
-    list.append(row);
-  });
-  container.append(list);
-  return container;
-}
-
-function renderPolicies(fixture) {
-  const policy = fixture.policy;
-  const container = element("div");
-  container.append(
-      detailGrid([
-        ["Version", policy.version],
-        ["Authorization", policy.authorization],
-        ["Risk", policy.riskLevel],
-        ["Reason", policy.reasonCodes.join(", ")]
-      ]));
-  const list = element("ul", "policy-list");
-  policy.rules.forEach((rule) => {
-    const row = element("li", "policy-rule");
-    row.append(element("span", "", rule.name));
-    row.append(statusPill(rule.result));
-    list.append(row);
-  });
-  container.append(list);
-  return container;
-}
-
-function renderReplay(fixture) {
-  const replay = fixture.replay;
-  const container = element("div");
-  const banner = element("div", "replay-status");
-  const copy = element("div");
-  copy.append(element("strong", "", replay.safe ? "Replay-safe view" : "Unsafe replay"));
-  copy.append(element("p", "", "读取既有审计事件，不会再次调用 executor。"));
-  banner.append(copy);
-  banner.append(statusPill(replay.executed ? "EXECUTED" : "NOT_EXECUTED"));
-  container.append(banner);
-  container.append(
-      detailGrid([
-        ["Timeline", replay.timelineId],
-        ["Executed by replay", replay.executed],
-        ["Historical executor calls", replay.sideEffectCount],
-        ["Safe", replay.safe]
-      ]));
-  container.append(codeCard("Invocation fingerprint", replay.fingerprint));
-  return container;
+function renderRunDetails(fixture) {
+  ui.detailsContent.replaceChildren();
+  ui.detailsContent.append(detailSection("Invocation", [
+    ["Tool", fixture.invocation.tool],
+    ["Principal", fixture.invocation.principal],
+    ["Tenant", fixture.invocation.tenant],
+    ["Environment", fixture.invocation.environment],
+    ["Resource", fixture.invocation.resource],
+    ["Operation", fixture.invocation.operation]
+  ]));
+  ui.detailsContent.append(codeSection("Proposed arguments", fixture.invocation.arguments));
+  ui.detailsContent.append(codeSection("Normalized arguments", fixture.invocation.normalizedArguments));
+  ui.detailsContent.append(eventSection("Decision trace", fixture.timeline));
+  ui.detailsContent.append(detailSection("Approval", [
+    ["Status", fixture.approval.status],
+    ["Policy version", fixture.approval.policyVersion],
+    ["Fingerprint", fixture.approval.fingerprint],
+    ["Expiry", fixture.approval.expiry || "Not created"]
+  ]));
+  ui.detailsContent.append(detailSection("Policy", [
+    ["Version", fixture.policy.version],
+    ["Authorization", fixture.policy.authorization],
+    ["Risk", fixture.policy.riskLevel],
+    ["Reason", fixture.policy.reasonCodes.join(", ")]
+  ]));
+  ui.detailsContent.append(eventSection("Audit", fixture.audit));
+  ui.detailsContent.append(detailSection("RAG trace · synthetic fixture", [
+    ["Query", fixture.ragTrace.query],
+    ["Tenant", fixture.ragTrace.tenant],
+    ["Boundary check", fixture.ragTrace.failure],
+    ["Citations", fixture.ragTrace.citations.length]
+  ]));
+  ui.detailsContent.append(detailSection("Replay · read only", [
+    ["Safe", fixture.replay.safe],
+    ["Executed by replay", fixture.replay.executed],
+    ["Historical executor calls", fixture.replay.sideEffectCount],
+    ["Timeline", fixture.replay.timelineId]
+  ]));
 }
 
 async function approveCurrentCase() {
-  if (!currentFixture?.approvalRequestId) {
+  if (!currentFixture?.approvalRequestId || ui.approveButton.disabled) {
     return;
   }
+  const approvalSequence = selectionSequence;
+  const approvedCaseId = currentFixture.id;
+  const approvalRequestId = currentFixture.approvalRequestId;
   ui.approveButton.disabled = true;
+  setRunStatus("RESUMING");
   try {
-    currentFixture = await requestJson(
-        `/api/playground/approvals/${currentFixture.approvalRequestId}`,
+    const fixture = await requestJson(
+        `/api/playground/approvals/${approvalRequestId}`,
         { method: "POST" });
+    if (approvalSequence !== selectionSequence ||
+        currentFixture?.id !== approvedCaseId ||
+        currentFixture?.approvalRequestId !== approvalRequestId) {
+      return;
+    }
+    currentFixture = fixture;
+    evidenceTimelineId = null;
     renderCurrentCase();
-    await activateTab(ui.tabs.find((tab) => tab.dataset.tab === "audit"));
   } catch (error) {
-    showLoadError();
+    if (approvalSequence === selectionSequence) {
+      setRunStatus("LOAD_FAILED");
+      ui.error.hidden = false;
+    }
   } finally {
-    ui.approveButton.disabled = false;
+    if (approvalSequence === selectionSequence &&
+        currentFixture?.id === approvedCaseId &&
+        currentFixture?.approvalRequestId === approvalRequestId) {
+      ui.approveButton.disabled = false;
+    }
   }
 }
 
-async function refreshEvidence() {
-  if (!currentFixture?.timelineId || !["audit", "replay"].includes(activeTab)) {
+function openRunDetails() {
+  if (!currentFixture) {
     return;
   }
-  const path = activeTab === "audit"
-      ? `/api/playground/audit/${currentFixture.timelineId}`
-      : `/api/playground/replay/${currentFixture.timelineId}`;
-  const evidence = await requestJson(path);
-  if (activeTab === "audit") {
-    currentFixture.audit = evidence.events;
-  } else {
-    currentFixture.replay = { ...currentFixture.replay, ...evidence };
+  ui.runDetails.open = true;
+  ui.runDetails.querySelector("summary").focus();
+}
+
+function loadDetailsWhenOpened() {
+  if (!ui.runDetails.open || !currentFixture) {
+    return;
   }
+  refreshEvidence().catch(showEvidenceError);
+}
+
+async function refreshEvidence() {
+  if (evidenceTimelineId === currentFixture.timelineId) {
+    return;
+  }
+  const timelineId = currentFixture.timelineId;
+  const evidenceSequence = selectionSequence;
+  const [audit, replay] = await Promise.all([
+    requestJson(`/api/playground/audit/${timelineId}`),
+    requestJson(`/api/playground/replay/${timelineId}`)
+  ]);
+  if (evidenceSequence !== selectionSequence || currentFixture.timelineId !== timelineId) {
+    return;
+  }
+  currentFixture.audit = audit.events;
+  currentFixture.replay = { ...currentFixture.replay, ...replay };
+  evidenceTimelineId = timelineId;
+  renderRunDetails(currentFixture);
+}
+
+function handleShortcut(event) {
+  if (event.target instanceof Element &&
+      event.target.closest("button, select, input, textarea, summary")) {
+    return;
+  }
+  const approvalVisible = !ui.approvalCheckpoint.hidden;
+  if (approvalVisible && (event.key === "1" || event.key === "Enter")) {
+    event.preventDefault();
+    approveCurrentCase();
+  } else if (currentFixture && event.key === "2") {
+    event.preventDefault();
+    openRunDetails();
+  }
+}
+
+function showLoadError() {
+  setRunStatus("LOAD_FAILED");
+  ui.outcomeBadge.textContent = "LOAD_FAILED";
+  ui.outcomeBadge.dataset.outcome = "DENIED";
+  ui.approvalCheckpoint.hidden = true;
+  ui.error.hidden = false;
+}
+
+function hidePendingApproval() {
+  ui.approvalCheckpoint.hidden = true;
+  ui.approveButton.disabled = true;
+}
+
+function showEvidenceError() {
+  ui.detailsContent.prepend(
+      element("p", "evidence-error", "Evidence endpoints are temporarily unavailable."));
+}
+
+function setRunStatus(status) {
+  ui.runStatus.textContent = runStatusCopy[status] || status;
+  ui.runStatus.dataset.status = status;
+}
+
+function detailSection(title, entries) {
+  const section = element("section", "details-section");
+  section.append(element("h3", "", title));
+  const list = element("dl", "details-grid");
+  entries.forEach(([label, value]) => appendDefinition(list, label, value));
+  section.append(list);
+  return section;
+}
+
+function codeSection(title, value) {
+  const section = element("section", "details-section");
+  section.append(element("h3", "", title));
+  section.append(codeBlock(value));
+  return section;
+}
+
+function eventSection(title, events) {
+  const section = element("section", "details-section");
+  section.append(element("h3", "", title));
+  const list = element("ol", "event-list");
+  events.forEach((event) => {
+    const item = element("li");
+    item.append(element("span", "", `${event.sequence} ${event.stage}`));
+    item.append(element("code", "", event.reasonCode));
+    item.append(element("span", `event-status ${String(event.status).toLowerCase()}`, event.status));
+    list.append(item);
+  });
+  section.append(list);
+  return section;
+}
+
+function appendDefinition(list, label, value) {
+  list.append(element("dt", "", label));
+  list.append(element("dd", "", value));
+}
+
+function toolLine(label, value) {
+  const line = element("div", "tool-line tool-table-row");
+  line.append(element("span", "", label));
+  line.append(element("code", "", value));
+  return line;
+}
+
+function stepLabel(step) {
+  return String(step).padStart(2, "0");
+}
+
+function codeBlock(value) {
+  return element(
+      "pre",
+      "",
+      typeof value === "string" ? value : JSON.stringify(value, null, 2));
 }
 
 async function requestJson(path, options = {}) {
@@ -343,36 +408,6 @@ async function requestJson(path, options = {}) {
     throw new Error(`request failed: ${response.status}`);
   }
   return response.json();
-}
-
-function detailGrid(entries) {
-  const grid = element("div", "detail-grid");
-  entries.forEach(([label, value]) => {
-    const card = element("div", "detail-card");
-    card.append(element("span", "data-label", label));
-    card.append(element("span", "data-value", value));
-    grid.append(card);
-  });
-  return grid;
-}
-
-function codeGrid(entries) {
-  const grid = element("div", "code-grid");
-  entries.forEach(([label, value]) => grid.append(codeCard(label, value)));
-  return grid;
-}
-
-function codeCard(label, value) {
-  const card = element("div", "code-card");
-  card.append(element("span", "data-label", label));
-  card.append(element("pre", "", typeof value === "string" ? value : JSON.stringify(value, null, 2)));
-  return card;
-}
-
-function statusPill(status) {
-  const value = String(status);
-  const className = value.toLowerCase().replaceAll("_", "-");
-  return element("span", `status-pill ${className}`, value);
 }
 
 function element(tagName, className = "", text) {

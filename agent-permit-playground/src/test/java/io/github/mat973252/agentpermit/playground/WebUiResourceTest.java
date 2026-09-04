@@ -20,24 +20,29 @@ class WebUiResourceTest {
     assertAll(
         () -> assertTrue(html.contains("id=\"case-select\"")),
         () -> assertTrue(html.contains("id=\"conversation\"")),
-        () -> assertTrue(html.contains("id=\"timeline\"")),
-        () -> assertTrue(html.contains("id=\"decision-title\"")),
-        () -> assertTrue(html.contains("id=\"decision-copy\"")),
-        () -> assertTrue(html.contains("class=\"control-status\"")),
-        () -> assertTrue(html.contains("本地实时演示")),
-        () -> assertTrue(html.contains("data-tab=\"tool-calls\"")),
-        () -> assertTrue(html.contains("data-tab=\"approvals\"")),
-        () -> assertTrue(html.contains("data-tab=\"audit\"")),
-        () -> assertTrue(html.contains("data-tab=\"rag-trace\"")),
-        () -> assertTrue(html.contains("data-tab=\"policies\"")),
-        () -> assertTrue(html.contains("data-tab=\"replay\"")),
-        () -> assertTrue(html.contains("aria-controls=\"inspector-content\"")),
-        () -> assertTrue(html.contains("批准并执行")),
-        () -> assertTrue(html.contains("RAG trace (fixture)")),
-        () -> assertTrue(html.contains("Executor calls")),
-        () -> assertFalse(html.contains("批准当前指纹")),
+        () -> assertTrue(html.contains("id=\"run-status\"")),
+        () -> assertTrue(html.contains("id=\"run-id\"")),
+        () -> assertTrue(html.contains("id=\"approval-checkpoint\"")),
+        () -> assertTrue(html.contains("id=\"run-details\"")),
+        () -> assertTrue(html.contains("class=\"terminal-shell\"")),
+        () -> assertTrue(html.contains("class=\"terminal-titlebar\"")),
+        () -> assertTrue(html.contains("class=\"session-line\"")),
+        () -> assertTrue(html.contains("class=\"prompt-row\"")),
+        () -> assertTrue(html.contains("<details")),
+        () -> assertTrue(html.contains("真实决策管线 · Mock 副作用")),
+        () -> assertFalse(html.contains("run-sidebar")),
+        () -> assertFalse(html.contains("role=\"tablist\"")),
+        () -> assertFalse(html.contains("decision-hero")),
         () -> assertTrue(css.contains("@media")),
-        () -> assertTrue(css.contains("--canvas")),
+        () -> assertTrue(css.contains("--terminal")),
+        () -> assertTrue(css.contains(".terminal-shell")),
+        () -> assertTrue(css.contains(".transcript")),
+        () -> assertTrue(css.contains(".tool-table")),
+        () -> assertTrue(css.contains(".approval-frame")),
+        () -> assertTrue(css.contains(".prompt-row")),
+        () -> assertTrue(css.contains(".tui-tool-call")),
+        () -> assertTrue(css.contains(".tui-approval")),
+        () -> assertFalse(css.contains(".panel")),
         () -> assertTrue(script.contains("/api/playground/cases")),
         () -> assertTrue(script.contains("/api/playground/decisions/")),
         () -> assertTrue(script.contains("/api/playground/approvals/")),
@@ -46,8 +51,15 @@ class WebUiResourceTest {
         () -> assertTrue(script.contains("APPROVAL_REQUIRED: {")),
         () -> assertTrue(script.contains("需要人工确认")),
         () -> assertTrue(script.contains("approvalRequestId")),
-        () -> assertTrue(script.contains("ArrowRight")),
-        () -> assertTrue(script.contains("PLAYGROUND_API_UNAVAILABLE")),
+        () -> assertTrue(script.contains("renderTranscript")),
+        () -> assertTrue(script.contains("renderToolInvocation")),
+        () -> assertTrue(script.contains("renderApproval")),
+        () -> assertTrue(script.contains("renderRunDetails")),
+        () -> assertTrue(script.contains("runStatusCopy")),
+        () -> assertTrue(script.contains("RESUMING")),
+        () -> assertTrue(html.contains("Allow once")),
+        () -> assertTrue(html.contains("View details")),
+        () -> assertTrue(html.contains("PLAYGROUND_API_UNAVAILABLE")),
         () -> assertTrue(script.contains("Historical executor calls")),
         () -> assertFalse(script.contains("innerHTML")),
         () -> assertFalse(html.contains("https://")));
@@ -56,6 +68,18 @@ class WebUiResourceTest {
   @Test
   void liveUiDoesNotReferenceSyntheticDecisionFixture() {
     assertFalse(resource("webui/app.js").contains("fixtures.json"));
+  }
+
+  @Test
+  void approvalResponseCannotOverwriteANewerScenarioSelection() {
+    var script = resource("webui/app.js");
+
+    assertAll(
+        () -> assertTrue(script.contains("const approvalSequence = selectionSequence")),
+        () -> assertTrue(script.contains("const approvedCaseId = currentFixture.id")),
+        () -> assertTrue(script.contains("currentFixture?.id !== approvedCaseId")),
+        () -> assertTrue(script.contains("approvalSequence !== selectionSequence")),
+        () -> assertTrue(script.contains("hidePendingApproval()")));
   }
 
   private static String resource(String path) {
