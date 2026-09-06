@@ -10,6 +10,10 @@ AgentPermit4j 位于 AI 模型与外部系统之间，为每次工具调用强�
 
 **v0.1 可信执行闭环**已经实现，包括：通用调用模型、Java 策略、动态 SQL 风险评估、审批指纹与过期控制、内存幂等、只追加审计时间线，以及本地 Playground。首批 v0.2 切片进一步加入运行时 evaluator 路由、可配置 HTTP 与 messaging 风险策略、可复用的 Spring AI 2.0 `ToolCallback` 适配器、最小 Spring Boot 自动配置、JDBC 审批请求存储、只追加 JDBC 审计时间线，以及带审批消费的 Redis 结果幂等。
 
+当前开发分支面向 **v0.3.0-SNAPSHOT**：显式注册多个业务方法、验证审批人授权，
+并用本地 JDBC 订单账本演示退款。参见[迭代计划](docs/iterations/v0.3.md)和
+[三工具接入示例](docs/refund-example.md)。该开发版本尚未发布；下文已发布依赖坐标仍为 v0.2.0。
+
 ## 为什么需要这个项目
 
 工具风险取决于上下文。同一个工具是否安全，会受到参数、调用主体、目标资源、租户和运行环境的共同影响。AgentPermit4j 将决策固化在确定性的后端代码中，而不是信任模型输出或提示词约束。
@@ -96,7 +100,7 @@ ToolCallback callback = GuardedToolCallback.fromAnnotated(dependencies, method);
 
 `errorCode` 必须是大写机器码；内置 `ANNOTATION_*` 前缀会在构造期被拒绝。应用负责选择一个不与同一工具其他策略原因码冲突的 code。其他管线阶段仍保留自己的原因码。自定义 code 会成为终态决策原因并进入审计；`errorMessage` 按该拒绝码解析，只出现在 callback JSON 中，不进入决策或审计事件。
 
-注解只声明策略，不反射执行 Java 方法，也不取代应用策略。真正的 API、SQL、文件或中间件调用仍由注入的 pipeline executor 完成，因此校验、审批、幂等、审计始终共享同一个执行边界。动态规则继续放在已有 authorizer 和 risk evaluator 中即可。这里不引入组件扫描或 AOP。
+`GuardedToolCallback.fromAnnotated` 工厂读取注解策略，不反射执行 Java 方法，也不取代应用策略。真正的 API、SQL、文件或中间件调用仍由注入的 pipeline executor 完成，因此校验、审批、幂等、审计始终共享同一个执行边界。动态规则继续放在已有 authorizer 和 risk evaluator 中即可。这里不引入组件扫描或 AOP。
 
 非 HTTP 写操作只覆盖资源映射即可，例如 `@AgentPermit(resourceType = "redis", resourceArg = "key")`。
 
@@ -152,7 +156,7 @@ var approvals =
         new InvocationFingerprinter());
 ```
 
-构造服务前，应用需要通过自己的迁移工具执行随包提供的 `io/github/mat973252/agentpermit/jdbc/approval-schema.sql`。适配器不会在启动时偷偷创建或修改生产表。H2 只用于离线验收测试，不是生产依赖。
+构造服务前，应用需要通过自己的迁移工具执行随包提供的 `io/github/mat973252/agentpermit/jdbc/approval-schema.sql`。适配器不会在启动时偷偷创建或修改生产表。H2 是 JDBC 适配器的测试依赖和本地 Playground 的运行依赖，不会作为 JDBC 库的运行依赖传递给应用。
 
 JDBC 服务实现现有 `ApprovalVerifier`，保持与内存实现一致的稳定原因码，并继续使用相同的版本化调用指纹。存储异常统一 fail-closed 为 `APPROVAL_STORAGE_UNAVAILABLE`。并发批准采用条件更新，因此只有一个调用方得到 `APPROVAL_APPROVED`，其余调用方得到幂等的 `APPROVAL_ALREADY_APPROVED`。
 
@@ -217,7 +221,7 @@ Linux/macOS：
 ./mvnw -q -pl agent-permit-playground -am verify
 ```
 
-该命令会构建所需模块、运行测试，并使用内存 mock 副作用执行全部场景。它不会访问真实文件系统、数据库、部署系统或审批服务。
+该命令会构建所需模块、运行测试，执行原有 mock 场景以及使用本地嵌入式 H2 账本的合成订单退款场景。它不会访问真实支付、部署或审批服务。
 
 每个 case 会输出：
 
@@ -267,7 +271,7 @@ Linux/macOS：
 ## 安全边界
 
 - 内存 guard 只保证单进程；Redis 结果 guard 可跨进程协调，但外部副作用与 Redis 完成写入不在同一事务中，且 Redis 数据丢失会破坏保证，因此不宣称无条件 exactly-once；
-- Playground 使用真实决策管线，但副作用端口是内存计数器；
+- Playground 原有 Web 场景使用真实决策管线和内存计数器；退款命令行场景使用本地 H2 账本和支付模拟器；
 - 当前内置动态规则覆盖 SQL、受保护文件路径、HTTP／SSRF 和部署场景；
 - Spring AI 适配器已经可复用；starter 从应用显式提供的 definition、pipeline 和 tool contract 装配回调，并可选地通过 Spring Security bridge 覆盖 principal、tenant 与 environment；
 - JDBC 审批请求、只追加审计时间线和 Redis 结果幂等已经实现；审批消费只适用于提供稳定幂等键的已审批结果型调用，内存 guard 为单实例绑定，Redis guard 为跨进程绑定；

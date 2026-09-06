@@ -1,9 +1,12 @@
 package io.github.mat973252.agentpermit.jdbc.approval;
 
 import io.github.mat973252.agentpermit.approval.ApprovalRequest;
+import io.github.mat973252.agentpermit.approval.ApprovalAuthorizer;
+import io.github.mat973252.agentpermit.approval.ApprovalDecision;
 import io.github.mat973252.agentpermit.approval.ApprovalVerifier;
 import io.github.mat973252.agentpermit.approval.InvocationFingerprinter;
 import io.github.mat973252.agentpermit.core.GateDecision;
+import io.github.mat973252.agentpermit.core.Principal;
 import io.github.mat973252.agentpermit.core.ToolInvocation;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -11,6 +14,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Supplier;
 import javax.sql.DataSource;
 
@@ -20,7 +24,7 @@ public final class JdbcApprovalService implements ApprovalVerifier {
   private static final String INSERT_REQUEST =
       "INSERT INTO agent_permit_approval_request "
           + "(request_id, fingerprint, expires_at_epoch_millis, approved) "
-          + "VALUES (?, ?, ?, 0)";
+          + "VALUES (?, ?, ?, ?)";
   private static final String APPROVE_REQUEST =
       "UPDATE agent_permit_approval_request SET approved = 1 "
           + "WHERE request_id = ? AND approved = 0 AND expires_at_epoch_millis > ?";
@@ -32,19 +36,44 @@ public final class JdbcApprovalService implements ApprovalVerifier {
   private final Clock clock;
   private final Supplier<String> idGenerator;
   private final InvocationFingerprinter fingerprinter;
+  private final JdbcApprovalReviews reviews;
 
   public JdbcApprovalService(
       DataSource dataSource,
       Clock clock,
       Supplier<String> idGenerator,
       InvocationFingerprinter fingerprinter) {
+    this(dataSource, clock, idGenerator, fingerprinter,
+        (approver, invocation) -> denied("APPROVER_NOT_CONFIGURED"));
+  }
+
+  public JdbcApprovalService(DataSource dataSource, Clock clock, Supplier<String> idGenerator,
+      InvocationFingerprinter fingerprinter, ApprovalAuthorizer approvalAuthorizer) {
     this.dataSource = Objects.requireNonNull(dataSource, "dataSource");
     this.clock = Objects.requireNonNull(clock, "clock");
     this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator");
     this.fingerprinter = Objects.requireNonNull(fingerprinter, "fingerprinter");
+    reviews = new JdbcApprovalReviews(dataSource, clock, fingerprinter,
+        Objects.requireNonNull(approvalAuthorizer, "approvalAuthorizer"));
   }
 
   public ApprovalRequest request(ToolInvocation normalizedInvocation, Duration lifetime) {
+    return request(normalizedInvocation, lifetime, 0);
+  }
+
+  public ApprovalRequest requestReview(ToolInvocation normalizedInvocation, Duration lifetime) {
+    return request(normalizedInvocation, lifetime, 2);
+  }
+
+  public GateDecision approve(String requestId, ToolInvocation invocation, Principal approver) {
+    return reviews.approve(requestId, invocation, approver);
+  }
+
+  public Optional<ApprovalDecision> decision(String requestId) {
+    return reviews.decision(requestId);
+  }
+
+  private ApprovalRequest request(ToolInvocation normalizedInvocation, Duration lifetime, int pendingState) {
     Objects.requireNonNull(normalizedInvocation, "normalizedInvocation");
     requirePositive(lifetime);
     var id = requireId(idGenerator.get());
@@ -56,6 +85,7 @@ public final class JdbcApprovalService implements ApprovalVerifier {
       statement.setString(1, id);
       statement.setString(2, fingerprint.value());
       statement.setLong(3, expiresAt.toEpochMilli());
+      statement.setInt(4, pendingState);
       statement.executeUpdate();
       return request;
     } catch (SQLException ignored) {
@@ -97,7 +127,7 @@ public final class JdbcApprovalService implements ApprovalVerifier {
     }
   }
 
-  private StoredApproval find(Connection connection, String requestId) throws SQLException {
+  static StoredApproval find(Connection connection, String requestId) throws SQLException {
     try (var statement = connection.prepareStatement(SELECT_REQUEST)) {
       statement.setString(1, requestId);
       try (var result = statement.executeQuery()) {
@@ -114,6 +144,9 @@ public final class JdbcApprovalService implements ApprovalVerifier {
     }
     if (approval.expiredAt(now)) {
       return denied("APPROVAL_EXPIRED");
+    }
+    if (approval.isReviewPending() || approval.approvalState() == 3) {
+      return denied("APPROVAL_REVIEW_REQUIRED");
     }
     return approval.isApproved()
         ? allowed("APPROVAL_ALREADY_APPROVED")
@@ -170,18 +203,4 @@ public final class JdbcApprovalService implements ApprovalVerifier {
     return new GateDecision(false, reasonCode);
   }
 
-  private record StoredApproval(String fingerprint, long expiresAtEpochMillis, int approvalState) {
-
-    private boolean expiredAt(long now) {
-      return now >= expiresAtEpochMillis;
-    }
-
-    private boolean isPending() {
-      return approvalState == 0;
-    }
-
-    private boolean isApproved() {
-      return approvalState == 1;
-    }
-  }
 }

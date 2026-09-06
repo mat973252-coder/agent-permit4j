@@ -94,6 +94,29 @@ Request creation uses a parameterized insert. Because its return type is `Approv
 
 This adapter persists verification state but deliberately does not consume approval in JDBC. The pipeline verifies approval before claiming idempotency; consuming there would reject a legitimate same-key cached retry. For an approved result-bearing call, `DecisionPreflight` therefore passes the verified approval request ID to the Redis guard, which binds it atomically with the result idempotency claim described below.
 
+## Identified review requests (v0.3)
+
+Both approval services add `requestReview`, identified `approve`, and a read-only
+`decision` lookup. An application-provided `ApprovalAuthorizer` sees the trusted
+reviewer and the exact normalized invocation. The service verifies fingerprint
+and expiry before recording approval. Reviewer policy failure returns a stable
+denial; the original constructor denies identified approvals unless configured.
+The legacy `approve(requestId)` path cannot approve a reviewed request.
+
+In JDBC, the original numeric state has four defined values: 0 legacy pending,
+1 legacy approved, 2 review pending, and 3 reviewed approved. Other values remain
+invalid. The additive approval-review schema stores request ID, approver ID,
+tenant ID, and decision time. A conditional state update and receipt insert share
+one JDBC transaction. Existing legacy requests do not require the new table;
+reviewed approval writes fail closed if it is absent. Older binaries fail closed
+when they encounter the new states and must not be used to serve reviewed flows.
+
+The application owns reviewer authentication, role/tenant policy, review endpoint
+authorization, and safe before/after display. The services retain no raw proposal
+arguments. A decision lookup does not authenticate its caller or expose an
+execution capability. The in-memory service retains the first successful review
+under its existing monitor; JDBC uses its conditional update across instances.
+
 ## In-memory idempotency
 
 `DecisionPipeline.process(invocation, approvalRequestId, idempotencyKey)` applies idempotency after normalization, authorization, and any required approval, immediately before the executor. The key is transport metadata and is deliberately excluded from `ToolInvocation` and approval fingerprints. Existing overloads remain compatible and execute without idempotency; callers that require retry protection must provide a stable non-blank key.
@@ -150,6 +173,23 @@ The callback uses `ResultDecisionPipeline`. Every response contains `outcome` an
 
 The adapter performs no component scanning, property binding, bean discovery, identity resolution, or security-context access. It exposes an optional `TrustedToolContextResolver` hook so a framework integration can replace trusted transport metadata immediately before mapping; resolver failure remains fail-closed through the existing context-invalid decision.
 
+## Explicit business-method registration (v0.3)
+
+`GuardedToolMethods.fromAnnotated` builds an immutable, name-ordered list from
+explicit application objects. All public methods it discovers with `@Tool` must
+also have `@AgentPermit`. Missing parameter names, duplicate tool names, and an
+empty registration are rejected. The factory does not perform bean or classpath
+scanning, interface/proxy annotation discovery, or automatic replacement of
+existing callbacks.
+
+Its shared dependencies omit the executor: each method supplies its own executor
+inside `ResultDecisionPipeline`. Spring AI's `MethodToolCallback` is invoked only
+by the elected idempotency owner, with JSON serialized from normalized scalar
+arguments. Business methods receive a fresh minimal `ToolContext` containing the
+normalized principal ID, tenant ID, and environment; no ambient context or raw
+model input is captured. The original annotation-only factories remain compatible
+and continue using their explicitly injected executors.
+
 ## Spring Boot convenience modules
 
 `agent-permit-spring-boot-starter` depends on `agent-permit-spring-boot-autoconfigure`, which depends on the reusable Spring AI adapter and Spring Boot auto-configuration API, with Spring Security Core as an optional integration dependency. This preserves the dependency direction `starter → autoconfigure → spring-ai → execution/core`; no Spring Boot or Spring Security dependency flows into the framework-neutral modules.
@@ -169,5 +209,15 @@ The Maven `verify` phase runs the CLI after tests. The printed side-effect count
 The optional Playground web process uses the JDK HTTP server bound only to loopback. Its decision endpoint accepts only server-defined synthetic case IDs; it never accepts browser-supplied principal, tenant, environment, risk, normalized arguments, or fingerprints as authority. One long-lived runtime owns the real result pipeline, in-memory approval service, audit log, idempotency guard, and per-case mock counters. Approval IDs are generated and bound on the backend, and approval resumes the same stored invocation with a stable idempotency key. Audit and replay endpoints expose only ordered safe event fields and do not receive a pipeline or executor. This process deliberately has no production authentication, persistence, or external connectors and must not be exposed as an approval service.
 
 ## Implementation boundary
+
+The v0.3 refund example owns a local H2 runtime, synthetic order ledger, payment
+simulator, and three annotated methods inside Playground. It uses JDBC approvals
+and audit, with process-local result idempotency and pending preview storage.
+The safe preview and fingerprint include amount, resource version, and policy
+revision. A conditional database update guards the order before payment; the
+example's policy snapshot is held through that operation. Known payment failure
+rolls the ledger back. An external payment and database commit are not one atomic
+transaction, and crash recovery is not claimed. See `refund-example.md` for the
+precise boundaries and reproducible walkthrough.
 
 The first vertical slice used Java policies and in-memory stores to prove semantics. P1 adds framework and storage adapters without moving framework, JDBC, or configuration types into core.

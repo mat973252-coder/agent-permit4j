@@ -6,7 +6,7 @@
   <parent>
     <groupId>io.github.mat973252</groupId>
     <artifactId>agent-permit4j</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0-SNAPSHOT</version>
   </parent>
   <artifactId>agent-permit-spring-ai</artifactId>
   <name>AgentPermit4j :: Spring AI Adapter</name>

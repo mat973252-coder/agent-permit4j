@@ -50,7 +50,30 @@ The backlog is ordered by proof of value. Each item includes an observable accep
 Acceptance: `PersistedSpringAiAcceptanceTest` proves that a Spring AI tool can pause for
 persisted approval, resume once, and expose a complete persisted audit timeline.
 
-## P2 — production hardening and ecosystem
+## P2 — trusted business writes (v0.3)
+
+Iteration plan and evidence: [docs/iterations/v0.3.md](docs/iterations/v0.3.md).
+
+- [x] Ship a local order-refund example with a JDBC business ledger and a controllable payment simulator.
+  - Verify: a refund changes the balance and version; denied and unapproved calls change neither the ledger nor payments.
+- [x] Provide explicit registration of multiple annotated business methods inside the guarded executor.
+  - Verify: normalized arguments reach the original method, duplicate names fail at registration, and retries do not invoke it again.
+- [x] Bind reviewed approvals to an authorized approver and retain the decision identity and time.
+  - Verify: unauthorized, cross-tenant, and self approval are rejected; a reviewed request cannot use the legacy approval shortcut.
+- [x] Show a backend-built refund preview and bind execution to its amount, resource version, and policy revision.
+  - Verify: changing arguments or policy invalidates approval; a concurrent order update is caught by a conditional database write before payment.
+- [x] Document a reproducible adoption walkthrough and complete the v0.3 acceptance matrix.
+  - Verify: three business tools run locally without credentials or real payments; Maven Wrapper verify passes.
+
+## P3 — outcome reconciliation (next iteration)
+
+Plan and failure matrix: [docs/iterations/v0.4.md](docs/iterations/v0.4.md).
+
+- [ ] Distinguish unknown outcomes from known failures and expose a safe execution reference.
+- [ ] Query the downstream operation before resolving an uncertain execution; never automatically replay an uncertain write.
+- [ ] Prove payment-success/receipt-loss recovery with deterministic failure injection.
+
+## Later — production hardening and ecosystem
 
 - [ ] OpenTelemetry metrics and traces.
 - [ ] OPA policy adapter.

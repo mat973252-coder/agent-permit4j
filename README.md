@@ -12,6 +12,12 @@ AgentPermit4j sits between an AI model and external systems. It enforces authori
 
 The **v0.1 trusted execution loop** is implemented: generic invocation modeling, Java policies, dynamic SQL risk, approval fingerprinting and expiry, in-memory idempotency, append-only audit timelines, and a local Playground. The first v0.2 slices add runtime evaluator routing, configurable HTTP and messaging risk policies, a reusable Spring AI 2.0 `ToolCallback` adapter, minimal Spring Boot auto-configuration, JDBC-backed approval requests, append-only JDBC audit timelines, and Redis-backed result idempotency with approval consumption.
 
+The current development checkout targets **v0.3.0-SNAPSHOT**: explicit registration of
+annotated business methods, identified reviewer authorization, and a local JDBC
+order-refund example. Follow the [iteration plan](docs/iterations/v0.3.md) and
+[three-tool walkthrough](docs/refund-example.md). This development version has not
+been published; the released dependency coordinates below remain v0.2.0.
+
 ## Why this project
 
 Tool risk is contextual. The same tool can be safe or dangerous depending on its arguments, principal, resource, tenant, and environment. AgentPermit4j keeps that decision in deterministic backend code instead of trusting model output or prompt instructions.
@@ -90,7 +96,7 @@ Annotation denials use the built-in stable reason codes by default. A tool may r
 
 `errorCode` must be an uppercase machine code; `ANNOTATION_*` is reserved and rejected at construction. The application is responsible for choosing a code that does not collide with another policy reason for the same tool. Other pipeline stages keep their own reason codes. The selected custom code becomes the terminal decision reason and is audited; `errorMessage` is resolved from that denial code, returned in the callback JSON, and never added to the decision or audit event.
 
-The annotation declares policy; it does not reflectively execute the Java method or replace application policy. The actual API, SQL, file, or middleware call remains the injected pipeline executor, so validation, approval, idempotency, and audit keep one execution boundary. Applications that need dynamic rules can keep the annotation small and use the existing authorizer and risk evaluator for the rest. No component scanning or AOP is involved.
+The `GuardedToolCallback.fromAnnotated` factory reads annotation policy; it does not reflectively execute the Java method or replace application policy. The actual API, SQL, file, or middleware call remains the injected pipeline executor, so validation, approval, idempotency, and audit keep one execution boundary. Applications that need dynamic rules can keep the annotation small and use the existing authorizer and risk evaluator for the rest. No component scanning or AOP is involved.
 
 For a non-HTTP write, override only its resource mapping, for example `@AgentPermit(resourceType = "redis", resourceArg = "key")`.
 
@@ -146,7 +152,7 @@ var approvals =
         new InvocationFingerprinter());
 ```
 
-Apply the bundled `io/github/mat973252/agentpermit/jdbc/approval-schema.sql` with the application's migration tool before constructing the service. The adapter never creates or changes production tables implicitly. H2 is used only for offline acceptance tests and is not a production dependency.
+Apply the bundled `io/github/mat973252/agentpermit/jdbc/approval-schema.sql` with the application's migration tool before constructing the service. The adapter never creates or changes production tables implicitly. H2 is a test dependency of the JDBC adapter and a runtime dependency of the local Playground example; it is not a transitive runtime dependency of the JDBC library.
 
 The JDBC service implements the existing `ApprovalVerifier`, preserves the in-memory reason codes, binds approval to the same versioned fingerprint, and treats storage failures as `APPROVAL_STORAGE_UNAVAILABLE`. Concurrent approval uses a conditional update, so one caller receives `APPROVAL_APPROVED` and later callers receive the idempotent `APPROVAL_ALREADY_APPROVED`.
 
@@ -197,7 +203,9 @@ The default build uses deterministic in-memory fakes. Run the opt-in real Redis 
 
 ## Run the Playground
 
-The command builds all required modules, runs the tests, and executes every scenario with in-memory mock side effects. It does not contact a filesystem, database, deployment system, or approval provider.
+The command builds all required modules, runs the tests, and executes the original
+mock scenarios plus a synthetic order refund with a local embedded H2 ledger.
+It does not contact real payment, deployment, or approval services.
 
 ```bash
 ./mvnw -q -pl agent-permit-playground -am verify

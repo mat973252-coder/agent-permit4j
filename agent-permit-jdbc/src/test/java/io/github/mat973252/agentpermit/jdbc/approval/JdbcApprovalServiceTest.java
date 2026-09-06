@@ -172,7 +172,7 @@ class JdbcApprovalServiceTest {
     var request = service.request(invocation("1.2.3"), Duration.ofMinutes(5));
     try (var connection = dataSource.getConnection();
         var statement = connection.prepareStatement(
-            "UPDATE agent_permit_approval_request SET approved = 2 WHERE request_id = ?")) {
+            "UPDATE agent_permit_approval_request SET approved = 99 WHERE request_id = ?")) {
       statement.setString(1, request.id());
       statement.executeUpdate();
     }

@@ -38,7 +38,7 @@ public final class GuardedToolCallback implements ToolCallback {
     this(definition, pipeline, contract, contextResolver, reasonCode -> null);
   }
 
-  private GuardedToolCallback(
+  GuardedToolCallback(
       ToolDefinition definition,
       ResultDecisionPipeline pipeline,
       SpringAiToolContract contract,
