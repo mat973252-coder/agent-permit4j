@@ -14,10 +14,10 @@ import java.util.Map;
 /** Synthetic, backend-built review view. Approve by stored ID, never by a submitted copy of this view. */
 public record RefundPreview(String reviewId, String requesterId, String tenantId, String environment,
     String orderId, long amountCents, long refundedBeforeCents, long refundedAfterCents,
-    long expectedVersion, String policyRevision) {
+    long expectedVersion, String policyRevision, String operationReference) {
 
   public Map<String, String> arguments() {
-    return Map.of("orderId", orderId, "amountCents", Long.toString(amountCents),
+    return Map.of("operationReference", operationReference, "amountCents", Long.toString(amountCents),
         "expectedVersion", Long.toString(expectedVersion), "policyRevision", policyRevision);
   }
 
@@ -25,12 +25,12 @@ public record RefundPreview(String reviewId, String requesterId, String tenantId
     return new ToolInvocation(new ToolDescriptor("orders.refund", ToolEffect.WRITE,
         Reversibility.IRREVERSIBLE, DataSensitivity.RESTRICTED),
         new Principal(requesterId, Map.of()), new Action("orders.refund"),
-        new Resource("order", orderId, Map.of("policyRevision", policyRevision)),
+        new Resource("refund", operationReference, Map.of("policyRevision", policyRevision)),
         new InvocationContext(tenantId, environment), arguments());
   }
 
   RefundPreview withReviewId(String id) {
     return new RefundPreview(id, requesterId, tenantId, environment, orderId, amountCents,
-        refundedBeforeCents, refundedAfterCents, expectedVersion, policyRevision);
+        refundedBeforeCents, refundedAfterCents, expectedVersion, policyRevision, operationReference);
   }
 }

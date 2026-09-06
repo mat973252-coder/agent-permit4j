@@ -3,6 +3,7 @@ package io.github.mat973252.agentpermit.playground.refund;
 import io.github.mat973252.agentpermit.core.GateDecision;
 import io.github.mat973252.agentpermit.core.Resource;
 import io.github.mat973252.agentpermit.core.ToolInvocation;
+import io.github.mat973252.agentpermit.execution.ExecutionOutcome;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -20,7 +21,7 @@ final class RefundPolicy {
     revision = value;
   }
 
-  synchronized String execute(String expectedRevision, Supplier<String> action) {
+  synchronized ExecutionOutcome execute(String expectedRevision, Supplier<ExecutionOutcome> action) {
     if (!revision.equals(expectedRevision)) {
       throw new IllegalStateException("refund policy changed");
     }
@@ -32,7 +33,7 @@ final class RefundPolicy {
       return invocation;
     }
     return new ToolInvocation(invocation.descriptor(), invocation.principal(), invocation.action(),
-        new Resource("order", invocation.resource().identifier(), Map.of("policyRevision", revision())),
+        new Resource("refund", invocation.resource().identifier(), Map.of("policyRevision", revision())),
         invocation.context(), invocation.arguments());
   }
 

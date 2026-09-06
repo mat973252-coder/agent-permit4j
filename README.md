@@ -12,10 +12,11 @@ AgentPermit4j sits between an AI model and external systems. It enforces authori
 
 The **v0.1 trusted execution loop** is implemented: generic invocation modeling, Java policies, dynamic SQL risk, approval fingerprinting and expiry, in-memory idempotency, append-only audit timelines, and a local Playground. The first v0.2 slices add runtime evaluator routing, configurable HTTP and messaging risk policies, a reusable Spring AI 2.0 `ToolCallback` adapter, minimal Spring Boot auto-configuration, JDBC-backed approval requests, append-only JDBC audit timelines, and Redis-backed result idempotency with approval consumption.
 
-The current development checkout targets **v0.3.0-SNAPSHOT**: explicit registration of
-annotated business methods, identified reviewer authorization, and a local JDBC
-order-refund example. Follow the [iteration plan](docs/iterations/v0.3.md) and
-[three-tool walkthrough](docs/refund-example.md). This development version has not
+The current development checkout targets **v0.4.0-SNAPSHOT**: explicit business
+method registration, identified review, and an order-refund example that retains
+uncertain outcomes and reconciles them without another payment. Follow the
+[iteration plan](docs/iterations/v0.4.md) and [three-tool walkthrough](docs/refund-example.md).
+This development version has not
 been published; the released dependency coordinates below remain v0.2.0.
 
 ## Why this project
@@ -206,6 +207,14 @@ The default build uses deterministic in-memory fakes. Run the opt-in real Redis 
 The command builds all required modules, runs the tests, and executes the original
 mock scenarios plus a synthetic order refund with a local embedded H2 ledger.
 It does not contact real payment, deployment, or approval services.
+
+The refund demonstration also loses a successful payment response, rebuilds its
+services over retained fixture state, and reconciles the order. Its business
+`ExecutionOutcome.status` is separate from the tool-call decision: `EXECUTED`
+means the guarded method returned, while `UNKNOWN` means payment is not yet
+confirmed locally. The read-only outcome view contains an opaque reference,
+status, and stable reason code; inspection and reconciliation require trusted
+principal and tenant/environment context.
 
 ```bash
 ./mvnw -q -pl agent-permit-playground -am verify

@@ -65,13 +65,23 @@ Iteration plan and evidence: [docs/iterations/v0.3.md](docs/iterations/v0.3.md).
 - [x] Document a reproducible adoption walkthrough and complete the v0.3 acceptance matrix.
   - Verify: three business tools run locally without credentials or real payments; Maven Wrapper verify passes.
 
-## P3 — outcome reconciliation (next iteration)
+## P3 — outcome reconciliation (v0.4)
 
 Plan and failure matrix: [docs/iterations/v0.4.md](docs/iterations/v0.4.md).
 
-- [ ] Distinguish unknown outcomes from known failures and expose a safe execution reference.
-- [ ] Query the downstream operation before resolving an uncertain execution; never automatically replay an uncertain write.
-- [ ] Prove payment-success/receipt-loss recovery with deterministic failure injection.
+- [x] Distinguish unknown outcomes from known failures and expose a safe execution reference.
+  - Verify: the preview reference is independent of approval and pipeline idempotency; outcome views contain only reference/status/reason and require the original trusted owner/context.
+- [x] Query the downstream operation before resolving an uncertain execution; never automatically replay an uncertain write.
+  - Verify: authoritative matching evidence updates the balance and outcome atomically; missing, unavailable, or mismatched evidence retains UNKNOWN and the order reservation.
+- [x] Prove payment-success/receipt-loss recovery with deterministic failure injection.
+  - Verify: lost response and failures before/after settlement commit recover with one payment request; independent service instances and concurrent reconciliation cannot duplicate payment or balance updates.
+
+## Next — independent adoption check
+
+- [ ] Have an independent developer integrate three existing Spring AI methods using the walkthrough.
+  - Verify: record integration time, extra wiring, and unsupported signatures; this is not yet measured by the local acceptance tests.
+- [ ] Use that evidence to select the next DTO/proxy or gateway integration slice.
+  - Verify: the chosen change removes an observed adoption obstacle and has a concrete executable example.
 
 ## Later — production hardening and ecosystem
 

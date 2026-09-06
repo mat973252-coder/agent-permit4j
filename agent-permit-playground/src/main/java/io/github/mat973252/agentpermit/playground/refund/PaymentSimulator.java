@@ -1,36 +1,102 @@
 package io.github.mat973252.agentpermit.playground.refund;
 
+import io.github.mat973252.agentpermit.execution.ExecutionStatus;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
-/** Synthetic payments only; the rejection happens before recording any payment. */
-public final class PaymentSimulator {
+/** Synthetic downstream state; new client instances can share its retained fixture state. */
+public final class PaymentSimulator implements PaymentQuery {
 
-  private final Map<RefundCommand, String> payments = new HashMap<>();
+  private final State state;
   private boolean rejectNext;
+  private boolean loseNextResponse;
 
-  public synchronized String refund(RefundCommand command) {
-    var existing = payments.get(command);
-    if (existing != null) {
-      return existing;
-    }
-    if (rejectNext) {
-      rejectNext = false;
-      throw new IllegalStateException("simulated payment unavailable");
-    }
+  public PaymentSimulator() {
+    this(new State());
+  }
+
+  private PaymentSimulator(State state) {
+    this.state = state;
+  }
+
+  public PaymentSimulator reconnect() {
+    return new PaymentSimulator(state);
+  }
+
+  public String refund(RefundCommand command) {
     var paymentId = command.tenantId() + "/" + command.orderId() + "/" + command.expectedVersion();
-    if (payments.containsValue(paymentId)) {
-      throw new IllegalStateException("payment operation amount mismatch");
+    var receipt = refund("legacy/" + paymentId, command);
+    if (receipt.status() == ExecutionStatus.FAILED) {
+      throw new IllegalStateException("simulated payment rejected");
     }
-    payments.put(command, paymentId);
     return paymentId;
   }
 
-  public synchronized void rejectNextPayment() {
-    rejectNext = true;
+  public PaymentReceipt refund(String reference, RefundCommand command) {
+    synchronized (state) {
+      state.requests++;
+      var existing = state.receipts.get(reference);
+      if (existing != null) {
+        if (!existing.command().equals(command)) {
+          throw new IllegalStateException("payment operation mismatch");
+        }
+        return existing;
+      }
+      var status = rejectNext ? ExecutionStatus.FAILED : ExecutionStatus.SUCCEEDED;
+      rejectNext = false;
+      var receipt = new PaymentReceipt(reference, command, status);
+      state.receipts.put(reference, receipt);
+      if (loseNextResponse) {
+        loseNextResponse = false;
+        throw new IllegalStateException("simulated payment response lost");
+      }
+      return receipt;
+    }
   }
 
-  public synchronized int paymentCount() {
-    return payments.size();
+  @Override
+  public Optional<PaymentReceipt> lookup(String reference) {
+    synchronized (state) {
+      state.queries++;
+      return Optional.ofNullable(state.receipts.get(reference));
+    }
+  }
+
+  public void loseNextResponse() {
+    synchronized (state) {
+      loseNextResponse = true;
+    }
+  }
+
+  public void rejectNextPayment() {
+    synchronized (state) {
+      rejectNext = true;
+    }
+  }
+
+  public int paymentCount() {
+    synchronized (state) {
+      return (int) state.receipts.values().stream()
+          .filter(receipt -> receipt.status() == ExecutionStatus.SUCCEEDED).count();
+    }
+  }
+
+  public int requestCount() {
+    synchronized (state) {
+      return state.requests;
+    }
+  }
+
+  public int queryCount() {
+    synchronized (state) {
+      return state.queries;
+    }
+  }
+
+  private static final class State {
+    final Map<String, PaymentReceipt> receipts = new HashMap<>();
+    int requests;
+    int queries;
   }
 }

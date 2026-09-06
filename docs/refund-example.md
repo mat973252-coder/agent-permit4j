@@ -1,6 +1,6 @@
 # Three guarded business tools: order refunds
 
-This source-checkout example targets v0.3.0-SNAPSHOT. It uses synthetic identities,
+This source-checkout example targets v0.4.0-SNAPSHOT. It uses synthetic identities,
 an embedded H2 business ledger, JDBC approval and audit adapters, and an in-process
 payment simulator. No LLM, credentials, network, or real payments are required.
 
@@ -19,7 +19,12 @@ the existing Playground and `RefundDemo`. Its refund section reports:
 SCENARIO refund-business
   PREVIEW order=order-1 refundedCents=0->2500 version=0 policy=refund-v1
   REVIEW approver=reviewer-a selfApproval=DENIED
-  RESULT outcome=EXECUTED payments=1 refundedCents=2500 version=1 retry=same-result
+  RESULT decision=EXECUTED status=SUCCEEDED payments=1 refundedCents=2500 version=1 retry=same-result
+SCENARIO refund-recovery
+  REVIEW approver=reviewer-a selfApproval=DENIED
+  RESPONSE status=UNKNOWN payments=1 refundedCents=0
+  REBUILT status=UNKNOWN reference=owner-scoped
+  RECONCILED status=SUCCEEDED payments=1 paymentRequests=1 refundedCents=2500 retry=same-snapshot
 ```
 
 The amount is in integer minor units: 2500 cents. The order begins with 10000 cents
@@ -34,8 +39,15 @@ the refund walkthrough runs in the terminal.
 - `orders.lookup`: returns the current balance.
 - `orders.previewRefund`: reads the balance, builds a before/after view and creates
   a reviewed approval request. It records a proposal but does not pay.
-- `orders.refund`: conditionally updates the order and calls the payment simulator
-  only after approval, policy evaluation, and idempotency election.
+- `orders.refund`: reserves the order and calls the payment simulator only after
+  approval, policy evaluation, and idempotency election; returns a business outcome.
+
+In v0.4 the refund arguments are `operationReference`, `amountCents`,
+`expectedVersion`, and `policyRevision`, supplied by `RefundPreview.arguments()`.
+The backend stores the actual order under that operation reference. The preview
+still displays the order and before/after amounts. Changing the reference or
+approved values invalidates approval, and a reference alone cannot authorize a
+payment. These demo arguments changed from v0.3; reusable callback APIs are unchanged.
 
 Supply one set of application policies and shared stores, then register only the
 objects you intend to expose:
@@ -99,32 +111,84 @@ The library stores the invocation fingerprint rather than raw arguments. The
 application retains the exact normalized proposal to display and submit for
 review. `RefundReviews` looks up its backend-owned preview by ID; a caller cannot
 approve an edited client-provided preview. Its proposal map is process-local, so
-this sample does not demonstrate restarting and resuming pending previews.
+this sample does not demonstrate restarting and approving pending review displays.
+The business operation record itself is now persisted separately and remains
+inspectable when application services are rebuilt.
 
 ## Resource and failure semantics
 
-The approved invocation binds requester, tenant, environment, amount, expected
-order version, and policy revision. Policy is checked during preflight and held
-stable through the local example's execution. The ledger's conditional update
-checks tenant, order, version, and remaining balance while holding the database
-write lock, before calling the payment simulator. Another writer cannot pass an
-obsolete version into a second payment.
+The approved invocation binds requester, tenant, environment, operation reference,
+amount, expected order version, and policy revision. The immutable stored proposal
+binds its order and owner. Policy is checked during preflight and held stable
+through the local example's initial attempt.
 
-A stale condition detected by the ledger becomes the existing generic
-`FAILED / EXECUTION_FAILED`; it does not mean a payment occurred. The example does
-not add a new domain-specific outcome to the reusable execution API.
+Before contacting payment, one database transaction checks tenant, order, version,
+remaining balance, and absence of another reservation. It reserves the order and
+moves the operation from NOT_STARTED to UNKNOWN. Only the caller that commits
+this transition may call payment. A stale/competing proposal becomes a known
+FAILED result with `REFUND_PRECONDITION_CHANGED` and no payment.
 
-Same-key retries return the exact cached result, subject to current preflight
-checks. Expired approval, revoked authorization, or a changed policy can prevent
-access to a cached result. A known simulated payment rejection rolls back the
-ledger and remains cached as a failure, without retrying payment.
+A confirmed downstream receipt must match the reference and full stored command.
+Success updates the refund balance/version, releases the reservation, and records
+SUCCEEDED in one local transaction. Confirmed rejection leaves the balance
+unchanged, releases the reservation, and records FAILED. A timeout, lost response,
+or failed settlement commit leaves an uncertain operation reserved for inspection.
+An empty downstream lookup is not proof of rejection and cannot release it.
 
-The simulated payment and the database commit are not a distributed transaction.
-The simulator retains its operation identity only in this process. A payment
-followed by a lost database commit or lost process is outside this example's
-recovery guarantee; unknown outcomes and reconciliation are the next iteration.
-Production remote tools need downstream idempotency and authoritative result
-queries. Do not interpret this demo as unconditional exactly-once delivery.
+```text
+NOT_STARTED -- commit reservation --> UNKNOWN -- verified success --> SUCCEEDED
+     |                                  |
+     +-- invalid order condition --> FAILED <-- verified rejection --+
+```
+
+`ExecutionOutcome` contains only `reference`, `status`, and `reasonCode`.
+`DecisionOutcome.EXECUTED` still means the guarded Java method returned normally;
+the nested business outcome may be UNKNOWN or FAILED. Applications must inspect
+that status before treating the refund as successful. An unexpected method
+exception keeps the existing pipeline `FAILED / EXECUTION_FAILED` behavior.
+
+## Inspect and reconcile
+
+The preview supplies an independent opaque reference before any payment attempt,
+so it is available even if the entire execution response is lost. It is distinct
+from the approval ID and the pipeline idempotency key. The simulator uses it to
+identify its downstream operation, but possession grants no read or write authority.
+
+```java
+var reference = preview.operationReference();
+var observed = workspace.inspect(reference, authenticatedOwner, trustedContext);
+var resolved = workspace.reconcile(reference, authenticatedOwner, trustedContext);
+```
+
+Both calls require the original trusted principal, tenant, and environment; unknown
+or unauthorized references return an empty result without querying payment.
+These are trusted application APIs, not authenticated HTTP endpoints. Never copy
+untrusted request fields into `Principal` or `InvocationContext`.
+
+Inspection reads the local business state. Reconciliation calls only `PaymentQuery`
+and conditionally records conclusive evidence; it never calls the payment method.
+Unavailable, mismatched, or inconclusive evidence keeps UNKNOWN and its reservation.
+Repeated/concurrent reconciliation cannot apply the balance adjustment twice.
+
+Same-key callback retries return their original cached snapshot, subject to
+current preflight checks. A later reconciliation does not mutate that snapshot or
+past decision-audit events; call `inspect` for current status. Expired approval or
+changed policy can still prevent access to the cached callback response.
+
+`workspace.restartServices()` constructs fresh services, callbacks, approval/audit
+clients, and a payment client over the retained H2 database and simulator state.
+Already claimed operations cannot elect another payment caller after this rebuild,
+even though the pipeline's in-memory cache has been replaced. The current local
+policy revision is preserved. Pending review-display maps are not recovered.
+
+This demonstrates application-service recovery, not a killed JVM or remote provider.
+H2 and simulator state live in this process; the example provisions a fresh local
+schema and does not ship a migration from the v0.3 demo. Production integrations
+need durable authoritative operation records, authenticated downstream queries,
+and all business writers to honor reservations. A lost reservation acknowledgment
+before payment can remain UNKNOWN indefinitely without conclusive evidence.
+There is no automatic retry, timeout-based release, cleanup, or append-only
+reconciliation history. Distributed exactly-once is not a guarantee of this demo.
 
 ## Executable evidence
 
@@ -139,6 +203,13 @@ queries. Do not interpret this demo as unconditional exactly-once delivery.
 - `RefundWorkspaceAcceptanceTest`: the complete three-tool flow, tampered amount,
   policy replacement, an order changed after approval, invalid missing numbers,
   eight concurrent callback retries, and consumed-approval rejection with a new key.
+- `RefundLostResponseTest`: a successful payment survives a lost response and local rollback.
+- `RefundReconciliationAcceptanceTest`: conclusive/uncertain outcomes, original-owner
+  isolation, service rebuilding, competing proposals, and concurrent service dispatch/reconciliation.
+- `RefundReconciliationFaultTest`: failures before/after settlement commit,
+  lost reservation acknowledgment, and mismatched downstream evidence.
+- `RefundWorkspaceRecoveryTest`: approved callbacks expose the safe reference,
+  rebuilt services reconcile without another payment, and the old cached snapshot stays unchanged.
 
 The next adoption check is to have independent users integrate three existing
 tools and measure time and extra wiring. That usability target has not yet been

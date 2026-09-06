@@ -21,8 +21,10 @@ public final class RefundLedger {
       statement.execute("CREATE TABLE refund_order (tenant_id VARCHAR(100) NOT NULL, "
           + "order_id VARCHAR(100) NOT NULL, paid_cents BIGINT NOT NULL, "
           + "refunded_cents BIGINT NOT NULL, order_version BIGINT NOT NULL, "
+          + "pending_reference VARCHAR(128), "
           + "PRIMARY KEY (tenant_id, order_id), "
           + "CHECK (paid_cents >= refunded_cents AND refunded_cents >= 0 AND order_version >= 0))");
+      RefundOperationStore.initialize(connection);
     } catch (SQLException exception) {
       throw unavailable();
     }
@@ -30,7 +32,8 @@ public final class RefundLedger {
 
   public void createOrder(OrderBalance order) {
     try (var connection = dataSource.getConnection();
-        var statement = connection.prepareStatement("INSERT INTO refund_order VALUES (?, ?, ?, ?, ?)")) {
+        var statement = connection.prepareStatement("INSERT INTO refund_order "
+            + "(tenant_id, order_id, paid_cents, refunded_cents, order_version) VALUES (?, ?, ?, ?, ?)")) {
       statement.setString(1, order.tenantId());
       statement.setString(2, order.orderId());
       statement.setLong(3, order.paidCents());
@@ -82,7 +85,7 @@ public final class RefundLedger {
     try (var statement = connection.prepareStatement(
         "UPDATE refund_order SET refunded_cents = refunded_cents + ?, order_version = order_version + 1 "
             + "WHERE tenant_id = ? AND order_id = ? AND order_version = ? "
-            + "AND paid_cents - refunded_cents >= ?")) {
+            + "AND paid_cents - refunded_cents >= ? AND pending_reference IS NULL")) {
       statement.setLong(1, command.amountCents());
       statement.setString(2, command.tenantId());
       statement.setString(3, command.orderId());

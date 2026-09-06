@@ -3,10 +3,12 @@ package io.github.mat973252.agentpermit.playground.refund;
 import io.github.mat973252.agentpermit.approval.ApprovalDecision;
 import io.github.mat973252.agentpermit.approval.InvocationFingerprinter;
 import io.github.mat973252.agentpermit.core.GateDecision;
+import io.github.mat973252.agentpermit.core.InvocationContext;
 import io.github.mat973252.agentpermit.core.Principal;
 import io.github.mat973252.agentpermit.core.RiskAssessment;
 import io.github.mat973252.agentpermit.core.RiskLevel;
 import io.github.mat973252.agentpermit.execution.InMemoryResultIdempotencyGuard;
+import io.github.mat973252.agentpermit.execution.ExecutionOutcome;
 import io.github.mat973252.agentpermit.jdbc.approval.JdbcApprovalService;
 import io.github.mat973252.agentpermit.jdbc.audit.JdbcAuditLog;
 import io.github.mat973252.agentpermit.springai.GuardedToolCallback;
@@ -21,36 +23,60 @@ import org.h2.jdbcx.JdbcDataSource;
 
 /** Local-only composition root with synthetic identities; not a production approval server. */
 public final class RefundWorkspace {
-  private final PaymentSimulator payments = new PaymentSimulator();
+  private final DataSource source;
+  private final Clock clock;
+  private final PaymentSimulator payments;
   private final RefundPolicy policy = new RefundPolicy();
   private final RefundLedger ledger;
   private final JdbcApprovalService approvals;
   private final RefundReviews reviews;
+  private final RefundOperationService operations;
   private final List<GuardedToolCallback> tools;
 
-  private RefundWorkspace(DataSource source, Clock clock) {
+  private RefundWorkspace(DataSource source, Clock clock, PaymentSimulator payments) {
+    this.source = source;
+    this.clock = clock;
+    this.payments = payments;
     ledger = new RefundLedger(source, payments);
-    ledger.initialize();
-    ledger.createOrder(new OrderBalance("tenant-a", "order-1", 10_000, 0, 0));
+    operations = new RefundOperationService(source, payments);
     var fingerprinter = new InvocationFingerprinter();
     approvals = new JdbcApprovalService(source, clock, () -> UUID.randomUUID().toString(),
         fingerprinter, (approver, invocation) -> new GateDecision(
             "reviewer".equals(approver.attributes().get("role"))
                 && invocation.context().tenantId().equals(approver.attributes().get("tenant"))
                 && !invocation.principal().id().equals(approver.id()), "REFUND_REVIEWER_POLICY"));
-    reviews = new RefundReviews(ledger, approvals, policy);
+    reviews = new RefundReviews(ledger, approvals, policy, operations);
     var dependencies = new GuardedToolMethods.Dependencies(policy::validate, policy::normalize,
         policy::authorize, invocation -> new RiskAssessment(RiskLevel.LOW, "REFUND_TOOL_POLICY"),
         approvals, new InMemoryResultIdempotencyGuard(fingerprinter),
         new JdbcAuditLog(source, () -> UUID.randomUUID().toString()), supplied -> supplied);
-    tools = GuardedToolMethods.fromAnnotated(dependencies, new RefundTools(ledger, reviews, policy));
+    tools = GuardedToolMethods.fromAnnotated(dependencies, new RefundTools(ledger, reviews, policy, operations));
   }
 
   public static RefundWorkspace inMemory(Clock clock) {
     var source = new JdbcDataSource();
     source.setURL("jdbc:h2:mem:refund-demo-" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1");
     initializeSchemas(source);
-    return new RefundWorkspace(source, clock);
+    var payments = new PaymentSimulator();
+    var ledger = new RefundLedger(source, payments);
+    ledger.initialize();
+    ledger.createOrder(new OrderBalance("tenant-a", "order-1", 10_000, 0, 0));
+    return new RefundWorkspace(source, clock, payments);
+  }
+
+  /** Rebuilds application services over retained local fixture state; does not restart the JVM. */
+  public RefundWorkspace restartServices() {
+    var workspace = new RefundWorkspace(source, clock, payments.reconnect());
+    workspace.policyRevision(policy.revision());
+    return workspace;
+  }
+
+  public Optional<ExecutionOutcome> inspect(String reference, Principal principal, InvocationContext context) {
+    return operations.inspect(reference, principal, context);
+  }
+
+  public Optional<ExecutionOutcome> reconcile(String reference, Principal principal, InvocationContext context) {
+    return operations.reconcile(reference, principal, context);
   }
 
   public List<GuardedToolCallback> tools() {

@@ -70,6 +70,23 @@ The pipeline depends on the `RiskEvaluator` interface rather than tool-specific 
 
 `DecisionPipeline` keeps the original void `ToolExecutor` contract. `ResultDecisionPipeline` is a parallel, framework-neutral path for tools that return immutable string output such as serialized API responses. Both pipelines use the same package-internal `DecisionPreflight`, so validation, normalization, authorization, risk, approval, and audit ordering cannot drift. `ToolExecutionResult` keeps the business output separate from `DecisionResult`; output is required only for `EXECUTED` and forbidden for denied, approval-required, or failed decisions.
 
+## Business outcome values (v0.4)
+
+The execution module adds `ExecutionOutcome(reference, status, reasonCode)` and
+`ExecutionStatus` without changing decision enums, cached-result serialization,
+or existing exception behavior. NOT_STARTED means no attempt has been claimed;
+UNKNOWN means authoritative completion is not established locally; SUCCEEDED and
+FAILED describe conclusive business outcomes. A tool that returns this value has
+completed its guarded method call, even when its business outcome is UNKNOWN.
+Clients must inspect the business status rather than infer success from EXECUTED.
+
+The reference is opaque and distinct from approval IDs and pipeline idempotency
+keys. It grants no read or execution authority. The value contains no command,
+credentials, fingerprint, or raw exception text. Storage, downstream queries,
+authorization, and reconciliation remain application responsibilities. The refund
+example below is their current concrete implementation; no generic workflow or
+reconciliation repository has been added to the reusable modules.
+
 ## Protected file resources
 
 `ProtectedPathAuthorizer` implements the Java `Authorizer` SPI for the first protected-resource policy. It allows normal reads such as `/workspace/README.md`, but denies deletion of `/workspace` and recursive deletion of its descendants with `PROTECTED_PATH`. A file action paired with a non-file resource is denied to prevent type-disguise bypasses.
@@ -210,14 +227,33 @@ The optional Playground web process uses the JDK HTTP server bound only to loopb
 
 ## Implementation boundary
 
-The v0.3 refund example owns a local H2 runtime, synthetic order ledger, payment
+The v0.4 refund example owns a local H2 runtime, synthetic order ledger, payment
 simulator, and three annotated methods inside Playground. It uses JDBC approvals
-and audit, with process-local result idempotency and pending preview storage.
-The safe preview and fingerprint include amount, resource version, and policy
-revision. A conditional database update guards the order before payment; the
-example's policy snapshot is held through that operation. Known payment failure
-rolls the ledger back. An external payment and database commit are not one atomic
-transaction, and crash recovery is not claimed. See `refund-example.md` for the
-precise boundaries and reproducible walkthrough.
+and audit, with process-local pipeline idempotency and review-display storage.
+The preview now includes an independent operation reference. Its immutable
+database proposal binds the order and original owner; the approved invocation
+binds that reference, amount, expected version, and policy revision.
+
+Before payment, a local transaction conditionally reserves the order and changes
+the operation from NOT_STARTED to UNKNOWN. Only its winning caller may dispatch
+payment, after that transaction commits. UNKNOWN and terminal records never elect
+a replacement caller. All example order writes honor the reservation. The local
+policy snapshot is held through the initial attempt, as in v0.3.
+
+Authoritative downstream receipts must match both reference and complete refund
+command. A local settlement transaction then updates the balance/version,
+releases the reservation, and records SUCCEEDED or FAILED together. Missing,
+mismatched, or unavailable evidence keeps the reservation. Reconciliation calls
+only the read-only `PaymentQuery` port; it cannot issue payment. Inspection and
+reconciliation require the trusted original principal, tenant, and environment.
+
+The original callback result remains an immutable cached snapshot; independent
+inspection supplies current business status. Reconciliation does not rewrite past
+decision-audit events or cached results. The business outcome record is not an
+append-only reconciliation history. Payment state is retained in a simulator
+object and H2 retains the business records while services are rebuilt. Actual JVM
+crashes, remote payment providers, reservation retention/cleanup, and production
+durability are not demonstrated. There is no timeout-based release or automatic
+retry. See `refund-example.md` for the reproducible walkthrough and failure cases.
 
 The first vertical slice used Java policies and in-memory stores to prove semantics. P1 adds framework and storage adapters without moving framework, JDBC, or configuration types into core.

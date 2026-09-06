@@ -1,6 +1,7 @@
 package io.github.mat973252.agentpermit.playground.refund;
 
 import io.github.mat973252.agentpermit.core.GateDecision;
+import io.github.mat973252.agentpermit.core.InvocationContext;
 import io.github.mat973252.agentpermit.core.Principal;
 import io.github.mat973252.agentpermit.jdbc.approval.JdbcApprovalService;
 import io.github.mat973252.agentpermit.springai.SpringAiToolContextKeys;
@@ -13,12 +14,14 @@ final class RefundReviews {
   private final RefundLedger ledger;
   private final JdbcApprovalService approvals;
   private final RefundPolicy policy;
+  private final RefundOperationService operations;
   private final Map<String, RefundPreview> previews = new ConcurrentHashMap<>();
 
-  RefundReviews(RefundLedger ledger, JdbcApprovalService approvals, RefundPolicy policy) {
+  RefundReviews(RefundLedger ledger, JdbcApprovalService approvals, RefundPolicy policy, RefundOperationService operations) {
     this.ledger = ledger;
     this.approvals = approvals;
     this.policy = policy;
+    this.operations = operations;
   }
 
   RefundPreview preview(String orderId, long amountCents, ToolContext context) {
@@ -28,9 +31,13 @@ final class RefundReviews {
     if (amountCents <= 0 || amountCents > order.refundableCents()) {
       throw new IllegalArgumentException("refund exceeds the available balance");
     }
-    var preview = new RefundPreview("pending", (String) values.get(SpringAiToolContextKeys.PRINCIPAL_ID),
-        tenant, (String) values.get(SpringAiToolContextKeys.ENVIRONMENT), orderId, amountCents,
-        order.refundedCents(), order.refundedCents() + amountCents, order.version(), policy.revision());
+    var principal = new Principal((String) values.get(SpringAiToolContextKeys.PRINCIPAL_ID), Map.of());
+    var scope = new InvocationContext(tenant, (String) values.get(SpringAiToolContextKeys.ENVIRONMENT));
+    var revision = policy.revision();
+    var operation = operations.prepare(new RefundCommand(tenant, orderId, amountCents, order.version()),
+        principal, scope, revision);
+    var preview = new RefundPreview("pending", principal.id(), tenant, scope.environment(), orderId, amountCents,
+        order.refundedCents(), order.refundedCents() + amountCents, order.version(), revision, operation.reference());
     var request = approvals.requestReview(preview.invocation(), Duration.ofMinutes(5));
     var stored = preview.withReviewId(request.id());
     previews.put(stored.reviewId(), stored);

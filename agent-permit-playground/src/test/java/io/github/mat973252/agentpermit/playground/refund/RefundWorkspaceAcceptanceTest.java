@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.mat973252.agentpermit.core.Principal;
+import io.github.mat973252.agentpermit.execution.ExecutionOutcome;
+import io.github.mat973252.agentpermit.execution.ExecutionStatus;
 import io.github.mat973252.agentpermit.springai.SpringAiToolContextKeys;
 import java.time.Clock;
 import java.time.Instant;
@@ -40,7 +42,7 @@ class RefundWorkspaceAcceptanceTest {
     assertTrue(workspace.approve(preview.reviewId(), reviewer()).permitted());
     var approved = context("refund", preview.reviewId());
     var first = call(workspace, "orders.refund", input, approved);
-    assertTrue(first.contains("EXECUTED"));
+    assertEquals(ExecutionStatus.SUCCEEDED, businessOutcome(first).status());
     assertEquals(first, call(workspace, "orders.refund", input, approved));
     assertEquals(1, workspace.payments().paymentCount());
     assertEquals(2_500, workspace.ledger().find("tenant-a", "order-1").refundedCents());
@@ -70,7 +72,8 @@ class RefundWorkspaceAcceptanceTest {
     workspace.ledger().refund(new RefundCommand("tenant-a", "order-1", 500, 0));
     var result = call(workspace, "orders.refund", JSON.toJson(preview.arguments()),
         context("stale", preview.reviewId()));
-    assertTrue(result.contains("EXECUTION_FAILED"));
+    assertEquals(ExecutionStatus.FAILED, businessOutcome(result).status());
+    assertEquals("REFUND_PRECONDITION_CHANGED", businessOutcome(result).reasonCode());
     assertEquals(1, workspace.payments().paymentCount());
     assertEquals(500, workspace.ledger().find("tenant-a", "order-1").refundedCents());
   }
@@ -92,7 +95,7 @@ class RefundWorkspaceAcceptanceTest {
       assertTrue(ready.await(5, TimeUnit.SECONDS));
       start.countDown();
       var first = results.getFirst().get(5, TimeUnit.SECONDS);
-      assertTrue(first.contains("EXECUTED"));
+      assertEquals(ExecutionStatus.SUCCEEDED, businessOutcome(first).status());
       for (var result : results) {
         assertEquals(first, result.get(5, TimeUnit.SECONDS));
       }
@@ -107,9 +110,9 @@ class RefundWorkspaceAcceptanceTest {
   @Test
   void missingRefundNumbersAreRejectedAsInvalidInputBeforePayment() {
     var workspace = RefundWorkspace.inMemory(CLOCK);
-    assertTrue(call(workspace, "orders.refund", "{\"orderId\":\"order-1\"}", context("missing", null))
+    assertTrue(call(workspace, "orders.refund", "{\"operationReference\":\"reference\"}", context("missing", null))
         .contains("REFUND_INPUT_INVALID"));
-    assertTrue(call(workspace, "orders.refund", "{\"orderId\":\"order-1\",\"amountCents\":2500}",
+    assertTrue(call(workspace, "orders.refund", "{\"operationReference\":\"reference\",\"amountCents\":2500}",
         context("missing-version", null)).contains("REFUND_INPUT_INVALID"));
     assertEquals(0, workspace.payments().paymentCount());
     assertEquals(0, workspace.ledger().find("tenant-a", "order-1").refundedCents());
@@ -120,6 +123,12 @@ class RefundWorkspaceAcceptanceTest {
         "{\"orderId\":\"order-1\",\"amountCents\":2500}", context("preview", null)), Map.class);
     assertEquals("EXECUTED", envelope.get("outcome"));
     return JSON.fromJson((String) envelope.get("output"), RefundPreview.class);
+  }
+
+  private static ExecutionOutcome businessOutcome(String response) {
+    var envelope = JSON.fromJson(response, Map.class);
+    assertEquals("EXECUTED", envelope.get("outcome"));
+    return JSON.fromJson((String) envelope.get("output"), ExecutionOutcome.class);
   }
 
   private static String call(RefundWorkspace workspace, String name, String input, ToolContext context) {

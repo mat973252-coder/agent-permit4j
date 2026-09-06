@@ -10,8 +10,8 @@ AgentPermit4j 位于 AI 模型与外部系统之间，为每次工具调用强�
 
 **v0.1 可信执行闭环**已经实现，包括：通用调用模型、Java 策略、动态 SQL 风险评估、审批指纹与过期控制、内存幂等、只追加审计时间线，以及本地 Playground。首批 v0.2 切片进一步加入运行时 evaluator 路由、可配置 HTTP 与 messaging 风险策略、可复用的 Spring AI 2.0 `ToolCallback` 适配器、最小 Spring Boot 自动配置、JDBC 审批请求存储、只追加 JDBC 审计时间线，以及带审批消费的 Redis 结果幂等。
 
-当前开发分支面向 **v0.3.0-SNAPSHOT**：显式注册多个业务方法、验证审批人授权，
-并用本地 JDBC 订单账本演示退款。参见[迭代计划](docs/iterations/v0.3.md)和
+当前开发分支面向 **v0.4.0-SNAPSHOT**：显式注册业务方法、验证审批人授权，
+并在本地退款样例中持久保留未知结果，通过查询与对账恢复账本而不再次支付。参见[迭代计划](docs/iterations/v0.4.md)和
 [三工具接入示例](docs/refund-example.md)。该开发版本尚未发布；下文已发布依赖坐标仍为 v0.2.0。
 
 ## 为什么需要这个项目
@@ -223,6 +223,11 @@ Linux/macOS：
 
 该命令会构建所需模块、运行测试，执行原有 mock 场景以及使用本地嵌入式 H2 账本的合成订单退款场景。它不会访问真实支付、部署或审批服务。
 
+退款演示还会模拟“支付成功但响应丢失”，重建服务后查询并对账。
+业务 `ExecutionOutcome.status` 与工具决策分开：`EXECUTED` 表示受保护的方法已返回，
+`UNKNOWN` 表示本地尚未确认支付结果，不能据此前者判断退款成功。
+结果视图只包含独立操作引用、状态和稳定原因码；查询与对账都需要可信主体和租户／环境上下文。
+
 每个 case 会输出：
 
 - 结构化执行结果 `outcome`；
@@ -271,7 +276,7 @@ Linux/macOS：
 ## 安全边界
 
 - 内存 guard 只保证单进程；Redis 结果 guard 可跨进程协调，但外部副作用与 Redis 完成写入不在同一事务中，且 Redis 数据丢失会破坏保证，因此不宣称无条件 exactly-once；
-- Playground 原有 Web 场景使用真实决策管线和内存计数器；退款命令行场景使用本地 H2 账本和支付模拟器；
+- Playground 原有 Web 场景使用真实决策管线和内存计数器；退款命令行场景使用本地 H2 账本和支付模拟器，已验证保留状态后的服务重建，未验证真实进程崩溃恢复；
 - 当前内置动态规则覆盖 SQL、受保护文件路径、HTTP／SSRF 和部署场景；
 - Spring AI 适配器已经可复用；starter 从应用显式提供的 definition、pipeline 和 tool contract 装配回调，并可选地通过 Spring Security bridge 覆盖 principal、tenant 与 environment；
 - JDBC 审批请求、只追加审计时间线和 Redis 结果幂等已经实现；审批消费只适用于提供稳定幂等键的已审批结果型调用，内存 guard 为单实例绑定，Redis guard 为跨进程绑定；
