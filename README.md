@@ -1,262 +1,180 @@
 # AgentPermit4j
 
-[English](README.md) | [简体中文](README.zh-CN.md)
+**Approve the exact action. Execute through policy. Keep retries from repeating it.**
 
-**A trusted action execution layer for Java agents.**
+[![Build](https://github.com/mat973252-coder/agent-permit4j/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/mat973252-coder/agent-permit4j/actions/workflows/build.yml)
+[![Java 21](https://img.shields.io/badge/Java-21-blue)](pom.xml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-AgentPermit4j sits between an AI model and external systems. It enforces authorization, dynamic risk assessment, approval, idempotency, and audit policies for every tool invocation.
+[English](README.md) · [简体中文](README.zh-CN.md)
 
-> 中文定位：面向 Java Agent 的可信动作执行层，在模型与外部系统之间强制执行授权、动态风险评估、审批、幂等和审计策略。
+AgentPermit4j is a Java library for controlling what AI agents are allowed to **do**. It puts authorization, contextual risk checks, exact-call approval, idempotency, and audit between a proposed tool call and your business code. Spring AI adapters connect that boundary to existing tools.
 
-## Project status
+[Try it locally](#try-it-locally) · [Integrate](#integrate-with-spring-ai) · [Documentation](#documentation) · [Guarantees and limits](#guarantees-and-limits)
 
-The **v0.1 trusted execution loop** is implemented: generic invocation modeling, Java policies, dynamic SQL risk, approval fingerprinting and expiry, in-memory idempotency, append-only audit timelines, and a local Playground. The first v0.2 slices add runtime evaluator routing, configurable HTTP and messaging risk policies, a reusable Spring AI 2.0 `ToolCallback` adapter, minimal Spring Boot auto-configuration, JDBC-backed approval requests, append-only JDBC audit timelines, and Redis-backed result idempotency with approval consumption.
+## Why AgentPermit4j?
 
-The current development checkout targets **v0.4.0-SNAPSHOT**: explicit business
-method registration, identified review, and an order-refund example that retains
-uncertain outcomes and reconciles them without another payment. Follow the
-[iteration plan](docs/iterations/v0.4.md) and [three-tool walkthrough](docs/refund-example.md).
-This development version has not
-been published; the released dependency coordinates below remain v0.2.0.
+An agent that can look up an order may also be able to refund it. Before the write happens, your application needs answers: who requested it, which tenant owns it, what exactly was approved, and what happens if the response is lost?
 
-## Why this project
+AgentPermit4j makes those checks explicit in backend code:
 
-Tool risk is contextual. The same tool can be safe or dangerous depending on its arguments, principal, resource, tenant, and environment. AgentPermit4j keeps that decision in deterministic backend code instead of trusting model output or prompt instructions.
+| At the action boundary | What you get |
+| --- | --- |
+| A tool call changes arguments or tenant after approval | Approval is bound to the complete normalized invocation; the changed call cannot reuse it. |
+| A tool's risk depends on its input | Java policies evaluate SQL, HTTP, messaging, or your own resource types at runtime. |
+| Multiple callers retry the same operation | A stable key and matching invocation share the stored result through the configured idempotency guard. |
+| A reviewer needs to approve a write | Identified review checks application-defined reviewer policy and records the first successful decision. |
+| You need to understand a decision | Stable reason codes and append-only audit timelines explain the path without retaining raw arguments or tool output. |
 
-## Initial scope
+The source checkout also includes an **order-refund recovery example**: a successful payment response is lost, the operation stays `UNKNOWN`, and a read-only reconciliation confirms it without another payment request.
 
-```text
-agent-permit-core         shared domain model and decisions
-agent-permit-policy       policy and dynamic risk evaluation SPI
-agent-permit-execution    guarded execution pipeline and idempotency
-agent-permit-approval     approval lifecycle and argument fingerprinting
-agent-permit-audit        append-only audit events
-agent-permit-jdbc         framework-neutral JDBC storage adapters
-agent-permit-redis        framework-neutral Redis result idempotency
-agent-permit-spring-ai    reusable Spring AI ToolCallback adapter
-agent-permit-spring-boot-autoconfigure  safe callback auto-configuration
-agent-permit-spring-boot-starter        Spring Boot starter dependency
-agent-permit-playground   Developer Workspace Agent demo
+## How it works
+
+```mermaid
+flowchart LR
+    A[Proposed tool call] --> B[Validate and normalize]
+    B --> C[Authorize and assess risk]
+    C -->|Denied| D[Stop]
+    C -->|Approval required| E[Verify exact-call approval]
+    C -->|Low risk| F[Claim idempotency key]
+    E -->|Approved| F
+    F -->|New owner| G[Run business method]
+    F -->|Existing result| H[Return cached result]
+    G --> I[Store result]
 ```
 
-The first release targets Spring AI and reproducible adapters. OPA, additional distributed stores, chat approval providers, and other agent frameworks are later milestones.
+Audit events accompany the decision stages. Identity, tenant, environment, approval ID, and idempotency key come from application-controlled context. Model text cannot grant permission. Every external side effect must stay inside the guarded executor.
 
-## Demo story
+## Try it locally
 
-The Playground demonstrates a Developer Workspace Agent with file read/delete, SQL read/write, outbound HTTP, messaging, and staging/production deployment scenarios. Read-only operations run automatically; production, selective writes, and message sends require exact backend approval; protected-resource deletion, SSRF targets, unlisted message destinations, and oversized content are denied.
-
-See [docs/demo-website.md](docs/demo-website.md) for the website flow and [TODO.md](TODO.md) for the executable roadmap.
-
-## Configure HTTP and messaging risk
-
-Applications provide evaluator and policy configuration at runtime:
-
-```java
-var riskEvaluator =
-    new RiskEvaluatorRegistry(
-        Map.of(
-            "sql", new SqlRiskEvaluator(),
-            "http",
-                new HttpRiskEvaluator(
-                    new HttpRiskPolicy(Set.of("api.example.com"), 16 * 1024)),
-            "messaging",
-                new MessagingRiskEvaluator(
-                    new MessagingRiskPolicy(Set.of("channel://ops"), 4 * 1024))));
-```
-
-The registry and policy take immutable snapshots. A configuration system can build and atomically replace a new snapshot when configuration changes; AgentPermit4j does not watch YAML, environment variables, or a remote configuration service inside the reusable policy module.
-
-Messaging destinations are opaque exact identifiers. An allowed `message.send` with a non-blank `body` inside the UTF-8 limit is `HIGH` and requires real backend approval. Message text that claims approval does not change that result. Vendor-specific destination normalization, semantic moderation, and DLP remain application policy concerns.
-
-## Spring AI adapter
-
-`agent-permit-spring-ai` exposes a reusable Spring AI 2.0 `ToolCallback`. For the common case, declare the fixed limits next to Spring AI's `@Tool` method:
-
-```java
-interface OrderTools {
-  @Tool(name = "orders.create", description = "Call the order API")
-  @AgentPermit(hosts = "api.example.com", maxBytes = 8192)
-  String createOrder(String uri, String payload);
-}
-
-Method method = OrderTools.class.getDeclaredMethod(
-    "createOrder", String.class, String.class);
-ToolCallback callback = GuardedToolCallback.fromAnnotated(dependencies, method);
-```
-
-The common case defaults to `resourceType="http"`, `resourceArg="uri"`, `effect=WRITE`, `risk=HIGH`, `reversibility=IRREVERSIBLE`, and `dataSensitivity=RESTRICTED`. Only overrides need to be written. The factory derives the tool name and input schema from `@Tool`. `risk` is a minimum: the configured dynamic evaluator may raise it but cannot lower it. `environments` uses trusted `ToolContext`; optional HTTP `hosts`, `methods`, and `maxBytes` constrain the `uri`, `method`, and `payload` arguments before execution. Host entries are bare host names; when `hosts` is configured, matching requests must use HTTPS with the default port.
-
-Annotation denials use the built-in stable reason codes by default. A tool may replace the code, the display message, or both:
-
-```java
-@AgentPermit(
-    hosts = "api.example.com",
-    errorCode = "ORDER_API_DENIED",
-    errorMessage = "Only the order API is allowed")
-```
-
-`errorCode` must be an uppercase machine code; `ANNOTATION_*` is reserved and rejected at construction. The application is responsible for choosing a code that does not collide with another policy reason for the same tool. Other pipeline stages keep their own reason codes. The selected custom code becomes the terminal decision reason and is audited; `errorMessage` is resolved from that denial code, returned in the callback JSON, and never added to the decision or audit event.
-
-The `GuardedToolCallback.fromAnnotated` factory reads annotation policy; it does not reflectively execute the Java method or replace application policy. The actual API, SQL, file, or middleware call remains the injected pipeline executor, so validation, approval, idempotency, and audit keep one execution boundary. Applications that need dynamic rules can keep the annotation small and use the existing authorizer and risk evaluator for the rest. No component scanning or AOP is involved.
-
-For a non-HTTP write, override only its resource mapping, for example `@AgentPermit(resourceType = "redis", resourceArg = "key")`.
-
-The lower-level API remains available when metadata is supplied dynamically. Applications provide a `ToolDefinition`, a configured `ResultDecisionPipeline`, and an immutable `SpringAiToolContract`:
-
-```java
-ToolCallback callback = new GuardedToolCallback(definition, pipeline, contract);
-```
-
-The adapter maps model-provided flat JSON arguments to `ToolInvocation`. Principal, tenant, environment, optional approval ID, and the required idempotency key are read only from application-controlled `ToolContext` entries named by `SpringAiToolContextKeys`; model arguments using those names are discarded. Applications using the lower-level API must never copy untrusted request or model fields into that context. Every external side effect remains inside the injected pipeline.
-
-The callback returns `{"outcome":"...","reasonCode":"...","output":"..."}` after successful execution. Non-executed decisions omit `output`. The result-bearing pipeline caches the exact string output for idempotent retries while audit events keep only decision metadata. The adapter itself performs no bean discovery, property binding, identity resolution, or auto-configuration. Acceptance tests cover public construction, trusted mapping, low-risk output, approval and resume, SSRF denial, invalid context, failure isolation, and idempotent retry.
-
-## Spring Boot starter
-
-Spring Boot 4 applications can depend on the convenience starter:
-
-```xml
-<dependency>
-  <groupId>io.github.mat973252</groupId>
-  <artifactId>agent-permit-spring-boot-starter</artifactId>
-  <version>0.2.0</version>
-</dependency>
-```
-
-The application must provide exactly one `ToolDefinition`, `SpringAiToolContract`, and fully configured `ResultDecisionPipeline`. The auto-configuration then creates one `GuardedToolCallback`. It backs off when any input is missing or when the application already provides that callback. Ambiguous inputs fail normal Spring injection instead of choosing silently.
-
-When Spring Security is present in the application, it can opt into trusted principal, tenant, and environment propagation by declaring one resolver. The starter keeps this integration optional, so the application must already provide its Spring Security dependency:
-
-```java
-@Bean
-SpringSecurityTenantEnvironmentResolver agentPermitTenantEnvironment() {
-  return authentication ->
-      new SpringSecurityTenantEnvironmentResolver.TenantEnvironment(
-          tenantContext.requiredTenantId(), deploymentEnvironment);
-}
-```
-
-The bridge snapshots the current authenticated, non-anonymous principal and lets the application resolve tenant and environment from its own trusted state. These three values replace any supplied `ToolContext` identity values; approval and idempotency metadata are preserved. Missing authentication, blank principal, or invalid resolver output fails closed as `SPRING_AI_CONTEXT_INVALID` before execution. No tenant or environment is guessed. If a callback runs on another thread, the application must use Spring Security's context-propagation facilities; a missing context is denied.
-
-The starter does not invent policies, executors, approval services, identity, tenant data, or permissive defaults. These security-sensitive dependencies remain explicit application beans.
-
-## JDBC approval storage
-
-`agent-permit-jdbc` persists approval request IDs, normalized invocation fingerprints, expiry timestamps, and approval state through a caller-provided `DataSource`:
-
-```java
-var approvals =
-    new JdbcApprovalService(
-        dataSource,
-        Clock.systemUTC(),
-        () -> UUID.randomUUID().toString(),
-        new InvocationFingerprinter());
-```
-
-Apply the bundled `io/github/mat973252/agentpermit/jdbc/approval-schema.sql` with the application's migration tool before constructing the service. The adapter never creates or changes production tables implicitly. H2 is a test dependency of the JDBC adapter and a runtime dependency of the local Playground example; it is not a transitive runtime dependency of the JDBC library.
-
-The JDBC service implements the existing `ApprovalVerifier`, preserves the in-memory reason codes, binds approval to the same versioned fingerprint, and treats storage failures as `APPROVAL_STORAGE_UNAVAILABLE`. Concurrent approval uses a conditional update, so one caller receives `APPROVAL_APPROVED` and later callers receive the idempotent `APPROVAL_ALREADY_APPROVED`.
-
-JDBC remains the source of approval verification. For result-bearing calls that also provide a stable idempotency key, the Redis guard described below atomically binds an approved request to that key immediately before execution. This keeps a legitimate same-key retry valid while rejecting a different key with `APPROVAL_ALREADY_CONSUMED`.
-
-## JDBC audit timeline
-
-`JdbcAuditLog` implements the existing `AuditSink` and persists the safe audit fields through an application-provided `DataSource`:
-
-```java
-var auditLog =
-    new JdbcAuditLog(dataSource, () -> UUID.randomUUID().toString());
-```
-
-Apply `io/github/mat973252/agentpermit/jdbc/audit-schema.sql` with the application's migration tool first. The adapter performs no implicit DDL. `InvocationAuditTrail` remains the only sequence source for pipeline timelines; JDBC stores the supplied sequence verbatim. The composite primary key `(timeline_id, event_sequence)` rejects duplicate appends, and `replaySafeView` returns an immutable sequence-ordered view.
-
-The table contains only the timeline ID, sequence, stage, tool, principal, tenant, status, stable reason code, and terminal outcome. Raw arguments, tool output, approval IDs, idempotency keys, fingerprints, and exception text are never written. Synchronous storage failures throw the generic `IllegalStateException("audit storage unavailable")` instead of silently losing an event or exposing driver details. If an audit write fails after an external side effect, the error still propagates; callers that need cross-process retry protection must supply the Redis result guard and a stable idempotency key.
-
-## Redis result idempotency
-
-`agent-permit-redis` provides a framework-neutral `ResultIdempotencyGuard` backed by a caller-owned Jedis client:
-
-```java
-var redisClient = RedisClient.create("redis://localhost:6379");
-var redisGuard =
-    new RedisResultIdempotencyGuard(
-        redisClient,
-        new RedisIdempotencyConfig(
-            "agent-permit:", Duration.ofSeconds(30), Duration.ofMillis(50)));
-```
-
-Inject `redisGuard` into the application's `ResultDecisionPipeline`. A Redis Lua script atomically binds the idempotency key to the complete normalized invocation fingerprint and elects one owner. Concurrent processes wait for the same terminal `ToolExecutionResult`; later retries reuse the exact cached output or failure. A key reused for another fingerprint fails with `IDEMPOTENCY_INVOCATION_MISMATCH`. Redis errors fail closed before an unclaimed side effect with `IDEMPOTENCY_STORAGE_UNAVAILABLE`.
-
-For an approved `HIGH` or `CRITICAL` result call, the same atomic claim also binds the approval request to the idempotency key and fingerprint. Repeating that pair is a retry; using the approval with another key returns `APPROVAL_ALREADY_CONSUMED`. A legacy or custom result guard that does not implement approval-aware coordination fails closed with `APPROVAL_CONSUMPTION_UNAVAILABLE`. Calls that bypass the idempotency-key pipeline overload do not receive this Redis consumption or cross-process deduplication. The Spring AI adapter already requires its key from trusted `ToolContext`.
-
-The owner lease detects an abandoned execution but never transfers execution rights. On expiry, the entry becomes the permanent `FAILED / IDEMPOTENCY_OWNER_LOST` terminal result, so automatic recovery cannot duplicate an uncertain side effect. There is no lease heartbeat; configure the lease above the longest expected tool execution time. Result and approval records have no TTL or delete API. Use a dedicated, access-controlled Redis deployment with persistence, appropriate high availability, and a `noeviction` policy: data loss, `FLUSHDB`, manual deletion, or eviction destroys the retry guarantee. Cached tool output is sensitive application data and must be protected accordingly.
-
-Raw idempotency and approval IDs are SHA-256 hashed in Redis key names. All adapter keys currently share the `{execution}` cluster hash slot so the multi-key approval claim stays atomic; this is an explicit single-slot scaling limit. The application owns and closes the Jedis client.
-
-The default build uses deterministic in-memory fakes. Run the opt-in real Redis acceptance suite against a disposable Redis instance with:
+You need **JDK 21** and Git. The repository includes Maven Wrapper. The first build downloads dependencies; the demos need no LLM key, Node.js, external database, or payment account.
 
 ```bash
-./mvnw -B -ntp -pl agent-permit-redis -am \
-  -Dtest=RedisResultIdempotencyGuardIT \
-  -Dsurefire.failIfNoSpecifiedTests=false \
-  -DagentPermitRedisUri=redis://localhost:6379 test
+git clone https://github.com/mat973252-coder/agent-permit4j.git
+cd agent-permit4j
+./mvnw -B -ntp -pl agent-permit-playground -am verify
 ```
 
-## Run the Playground
-
-The command builds all required modules, runs the tests, and executes the original
-mock scenarios plus a synthetic order refund with a local embedded H2 ledger.
-It does not contact real payment, deployment, or approval services.
-
-The refund demonstration also loses a successful payment response, rebuilds its
-services over retained fixture state, and reconciles the order. Its business
-`ExecutionOutcome.status` is separate from the tool-call decision: `EXECUTED`
-means the guarded method returned, while `UNKNOWN` means payment is not yet
-confirmed locally. The read-only outcome view contains an opaque reference,
-status, and stable reason code; inspection and reconciliation require trusted
-principal and tenant/environment context.
-
-```bash
-./mvnw -q -pl agent-permit-playground -am verify
-```
-
-On Windows:
+On Windows, replace the last command with:
 
 ```powershell
-.\mvnw.cmd -q -pl agent-permit-playground -am verify
+.\mvnw.cmd -B -ntp -pl agent-permit-playground -am verify
 ```
 
-Each case prints its structured outcome, stable reason code, observed mock side-effect count, and audit stages. The process exits with code `0` after all scenarios complete.
+This runs tests and terminal demos using the real decision pipeline, mock external actions, and a local H2 refund ledger. The recovery demo prints:
 
-### Open the live Web UI
+```text
+SCENARIO refund-recovery
+  REVIEW approver=reviewer-a selfApproval=DENIED
+  RESPONSE status=UNKNOWN payments=1 refundedCents=0
+  REBUILT status=UNKNOWN reference=owner-scoped
+  RECONCILED status=SUCCEEDED payments=1 paymentRequests=1 refundedCents=2500 retry=same-snapshot
+```
 
-The Playground web server exposes the execution console and loopback-only live decision, approval, audit, and replay APIs. The three server-defined cases use the production pipeline with in-memory approval, audit, and result-idempotency components plus mock side effects. Selecting **Approve and execute** approves the backend-created request and resumes the exact invocation; concurrent or later retries still produce one mock side effect. Audit and replay endpoints return only the existing safe event view and never invoke the executor. The RAG tab remains a clearly labeled synthetic future-integration example.
+`payments=1` and `paymentRequests=1` stay unchanged through reconciliation. See the [complete refund walkthrough](docs/refund-example.md) for the approval, order-version, concurrency, and failure cases.
 
-Build and install the local artifacts once, then start the Java 21 HTTP server:
+### Explore the Web Playground
 
 ```bash
 ./mvnw -B -ntp -pl agent-permit-playground -am -DskipTests install
 ./mvnw -f agent-permit-playground/pom.xml exec:java@run-web
 ```
 
-On Windows, use `mvnw.cmd` and `agent-permit-playground\pom.xml`. Then open `http://127.0.0.1:8088/`. Override the port with `-Dagentpermit.playground.port=8089`; PowerShell requires the whole property to be quoted as `"-Dagentpermit.playground.port=8089"`. No Node.js, frontend dependency installation, database, or external service is required.
+On Windows use `.\mvnw.cmd` with the same arguments. Open [localhost:8088](http://127.0.0.1:8088/) to inspect decisions, approve a fixed demo action, retry it, and replay its audit timeline.
 
-The server binds only to loopback and accepts only fixed synthetic demo cases. Its approval endpoint has no production authentication or workflow integration; do not expose it as a real approval service.
+The web console uses synthetic scenarios and mock side effects; the refund recovery example runs in the terminal. The server listens only on loopback and has no production approval authentication. [Playground details](docs/demo-website.md).
 
-## Build
+## Integrate with Spring AI
 
-Requirements: Java 21. No global Maven installation is required.
+**Current source version: `0.4.0-SNAPSHOT` · Java 21 · Spring AI 2.0.1 · Spring Boot 4.0.8**
+
+Install this checkout into your local Maven repository:
 
 ```bash
-./mvnw verify
+./mvnw -B -ntp -DskipTests install
 ```
 
-On Windows:
+Then add the adapter to your application:
 
-```powershell
-.\mvnw.cmd verify
+```xml
+<dependency>
+  <groupId>io.github.mat973252</groupId>
+  <artifactId>agent-permit-spring-ai</artifactId>
+  <version>0.4.0-SNAPSHOT</version>
+</dependency>
 ```
+
+The snapshot is a source-build dependency. A [`v0.2.0` Git tag](https://github.com/mat973252-coder/agent-permit4j/tree/v0.2.0) exists, but these newer APIs are not in that tag. Do not assume either version is available from Maven Central.
+
+### Register existing business methods
+
+Place `@AgentPermit` beside Spring AI's `@Tool` on each public method you expose. Supply your validator, normalizer, authorization and risk policies, approval service, shared idempotency guard, audit sink, and trusted-context resolver:
+
+```java
+// Wiring excerpt: all dependencies and tool objects are application-owned.
+var dependencies = new GuardedToolMethods.Dependencies(
+    validator, normalizer, authorizer, riskEvaluator,
+    approvals, resultIdempotencyGuard, auditSink, trustedContextResolver);
+
+var callbacks = GuardedToolMethods.fromAnnotated(dependencies, orderTools);
+// Register only these guarded callbacks with your Spring AI client.
+```
+
+The factory invokes each method **inside** the execution pipeline. Compile tool classes with `-parameters`; the current mapper accepts flat scalar arguments. Registration is explicit, with no classpath scanning or proxy/interface annotation discovery.
+
+Start with the working [three-tool example](docs/refund-example.md) and its [RefundTools implementation](agent-permit-playground/src/main/java/io/github/mat973252/agentpermit/playground/refund/RefundTools.java). The [configuration reference](docs/integration-reference.md) covers annotation limits, custom denial codes, the lower-level callback API, Spring Boot wiring, and the optional Spring Security bridge. Adding the starter alone does not supply policies or automatically protect existing tools.
+
+## Guarantees and limits
+
+AgentPermit4j protects calls routed through its pipeline. Applications own authentication, reviewer authorization, business invariants, and the external executor; the SDK does not sandbox arbitrary Java code.
+
+| Area | Contract and boundary |
+| --- | --- |
+| Approval | Binds normalized arguments, principal, resource, tenant, and environment, with expiry. Reviewer roles and self-approval rules are application policy. |
+| Idempotency | In-memory guards coordinate within one instance. Redis coordinates across processes, provided records survive. External actions and Redis are not one transaction; there is no unconditional distributed exactly-once guarantee. |
+| Redis operations | Owner expiry never transfers execution rights. Records have no TTL or cleanup API; persistence, `noeviction`, lease sizing, sensitive cached output, and the single cluster slot require operational planning. |
+| Audit | Stores decision metadata; excludes raw arguments, output, and approval secrets. Replay only reads events. An audit write failure after an external action cannot undo that action. |
+| Resource checks | HTTP policies do not resolve DNS; the executor must handle DNS rebinding. Lexical file policies do not resolve symlinks or filesystem races. |
+| Refund recovery | `EXECUTED` means the Java method returned; its business status can still be `UNKNOWN` or `FAILED`. Reconciliation belongs to the example, not a generic SDK workflow engine. |
+
+The refund demo rebuilds services over retained H2 and simulator state in one process. It does not prove recovery from a killed JVM or a real payment provider. Unknown operations remain reserved until conclusive evidence arrives; there is no automatic payment retry or timeout release. [Detailed contracts](docs/architecture.md).
+
+## Documentation
+
+| I want to… | Start here |
+| --- | --- |
+| Integrate three actual tools with approval and recovery | [Order-refund walkthrough](docs/refund-example.md) |
+| Configure Spring AI, Spring Boot, JDBC, or Redis | [Integration reference](docs/integration-reference.md) |
+| Understand trust boundaries and dependency direction | [Architecture](docs/architecture.md) |
+| Explore the local console | [Playground guide](docs/demo-website.md) |
+| See implemented work and acceptance criteria | [Roadmap](TODO.md), [v0.3](docs/iterations/v0.3.md), [v0.4](docs/iterations/v0.4.md) |
+
+## Modules
+
+All artifact names below use the `agent-permit-` prefix. Reusable domain and policy modules stay independent of Spring and storage clients.
+
+| Modules | Responsibility |
+| --- | --- |
+| `core`, `policy` | Immutable invocation/decision values and Java policy interfaces/evaluators |
+| `execution` | Guarded pipelines, business outcome values, and in-memory idempotency |
+| `approval`, `audit` | Approval lifecycle, fingerprints, identified review, and safe audit timelines |
+| `jdbc`, `redis` | JDBC approval/audit storage and Redis result idempotency |
+| `spring-ai` | Guarded callbacks, annotation policy, and explicit method registration |
+| `spring-boot-autoconfigure`, `spring-boot-starter` | Explicit callback wiring and optional trusted Spring Security context |
+| `playground` | Runnable demonstrations and acceptance scenarios |
+
+## Contributing
+
+Bug reports, integration feedback, and focused pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md), then run the repository checks:
+
+```bash
+./mvnw -B -ntp verify
+```
+
+Windows: `.\mvnw.cmd -B -ntp verify`. The default suite uses deterministic fakes; the [real Redis acceptance suite](docs/integration-reference.md#redis-result-idempotency) is opt-in.
+
+Report reproducible problems through [GitHub Issues](https://github.com/mat973252-coder/agent-permit4j/issues). For vulnerabilities, follow [SECURITY.md](SECURITY.md).
 
 ## License
 
-Apache License 2.0.
+[Apache License 2.0](LICENSE).
