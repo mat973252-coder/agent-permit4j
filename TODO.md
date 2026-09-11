@@ -76,12 +76,23 @@ Plan and failure matrix: [docs/iterations/v0.4.md](docs/iterations/v0.4.md).
 - [x] Prove payment-success/receipt-loss recovery with deterministic failure injection.
   - Verify: lost response and failures before/after settlement commit recover with one payment request; independent service instances and concurrent reconciliation cannot duplicate payment or balance updates.
 
-## Next — independent adoption check
+## P4 — independent adoption and release readiness (v0.5, in progress)
+
+Iteration plan: [docs/iterations/v0.5.md](docs/iterations/v0.5.md).
+
+- [x] Build a standalone Maven consumer of three guarded Spring AI methods.
+  - Verify: resolve SDK artifacts without the SDK parent POM, Playground dependencies, or reactor source access; prove approval and same-key retry behavior in an isolated consumer build.
 
 - [ ] Have an independent developer integrate three existing Spring AI methods using the walkthrough.
-  - Verify: record integration time, extra wiring, and unsupported signatures; this is not yet measured by the local acceptance tests.
-- [ ] Use that evidence to select the next DTO/proxy or gateway integration slice.
-  - Verify: the chosen change removes an observed adoption obstacle and has a concrete executable example.
+  - Verify: record original signatures, integration time, extra wiring, maintainer assistance, and unsupported signatures; automated consumer tests do not replace this unmeasured adoption check.
+- [ ] Use that evidence to fix at most one observed adoption obstacle.
+  - Verify: a failing consumer example demonstrates the obstacle, and the smallest documentation, wiring, DTO, or proxy change resolves it while preserving security contracts.
+- [x] Prepare unsigned candidate artifacts and verify local artifact consumption.
+  - Verify: the candidate profile produces 41 library files, the isolated consumer passes online and offline, and release/adoption instructions distinguish completed checks from pending publication.
+- [ ] Complete signed publication and public-repository consumption after adoption review.
+  - Verify: assign the release version, validate signing and Portal access, confirm the private reporting channel, publish, and resolve the released artifacts from an empty Maven repository without source install.
+- [x] Complete automated candidate regression evidence, including the opt-in real Redis suite.
+  - Verify: full Maven Wrapper verify, the standalone consumer, and five real Redis acceptance cases pass. Actual adopter results and publication remain separate unfinished gates above.
 
 ## Later — production hardening and ecosystem
 

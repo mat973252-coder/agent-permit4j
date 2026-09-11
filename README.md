@@ -144,6 +144,8 @@ The refund demo rebuilds services over retained H2 and simulator state in one pr
 | I want to… | Start here |
 | --- | --- |
 | Integrate three actual tools with approval and recovery | [Order-refund walkthrough](docs/refund-example.md) |
+| Consume SDK artifacts in a standalone application | [Three-method adoption example](examples/spring-ai-adoption/README.md) |
+| Prepare and verify distributable artifacts | [Candidate and release checks](docs/releasing.md), [Changelog](CHANGELOG.md) |
 | Configure Spring AI, Spring Boot, JDBC, or Redis | [Integration reference](docs/integration-reference.md) |
 | Understand trust boundaries and dependency direction | [Architecture](docs/architecture.md) |
 | Explore the local console | [Playground guide](docs/demo-website.md) |

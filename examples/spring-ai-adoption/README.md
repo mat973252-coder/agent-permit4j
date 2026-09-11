@@ -1,0 +1,104 @@
+# Adopt three existing Spring AI methods
+
+This standalone Java 21 application consumes AgentPermit4j as Maven artifacts.
+It has no SDK parent POM, no reactor membership, and no Playground dependency.
+The three methods query inventory, prepare a review, and reserve the reviewed quantity.
+All business state, identity, approvals, and inventory changes are local synthetic data.
+There is no LLM, web server, external database, or payment account.
+
+## Run from this source checkout
+
+Install the SDK, then build this example in a separate Maven invocation:
+
+```powershell
+.\mvnw.cmd -B -ntp -DskipTests -pl '!agent-permit-playground' install
+.\mvnw.cmd -B -ntp -f examples/spring-ai-adoption/pom.xml verify
+```
+
+On Linux/macOS, use `./mvnw` with the same arguments. The example also works with
+an installed Maven when copied outside this repository: `mvn -B -ntp verify`.
+Current dependency: `0.4.0-SNAPSHOT`, installed from source. It is not a promise
+that this version is available from Maven Central.
+
+The tests and terminal demonstration print:
+
+```text
+ADOPTION tools=3 lookup=EXECUTED pending=APPROVAL_REQUIRED reviewed=true result=EXECUTED writes=1 available=8 retrySame=true
+```
+
+The inventory starts at 10. A reviewer approves a reservation of 2. Concurrent
+and later same-key retries return the same result, leaving 8 units and one write.
+
+## Where to connect your application
+
+| Responsibility | Example | Your application supplies |
+| --- | --- | --- |
+| Existing business methods | [InventoryTools](src/main/java/example/inventory/InventoryTools.java) | Public `@Tool` methods with `@AgentPermit` and named scalar parameters |
+| Explicit SDK wiring | [InventoryApplication](src/main/java/example/inventory/InventoryApplication.java) | Validator, normalizer, authorization/risk policy, stores, audit, trusted context |
+| Concrete review | [InventoryReviews](src/main/java/example/inventory/InventoryReviews.java), [InventoryPreview](src/main/java/example/inventory/InventoryPreview.java) | Backend-owned normalized proposal and authenticated reviewer policy |
+| Business invariant | [InventoryStore](src/main/java/example/inventory/InventoryStore.java) | Atomic version/quantity checks in your actual write boundary |
+| Host-controlled invocation | [InventoryDemo](src/main/java/example/inventory/InventoryDemo.java) | Stable operation key and trusted identity/tenant/environment |
+
+Register the list returned by `app.tools()` as Spring AI callbacks. Register only
+those guarded callbacks for these business methods; exposing the original tool
+object separately creates an unprotected path.
+
+`InventoryApplication` constructs one shared approval service, result-idempotency
+guard, and audit log. These instances live as long as the application. Rebuilding
+them per call loses approval state and retry coordination.
+
+The example's `context(...)` helper represents an authenticated transport boundary.
+It is called by the local host code, not by the model. In a web application derive
+identity and tenant from the authenticated session, and derive the operation key
+from a stable application operation. Do not pass browser/model identity claims
+directly to this helper. Use the [trusted-context integration](../../docs/integration-reference.md)
+for Spring Security wiring and thread propagation limits.
+
+The reviewer is an authenticated principal supplied by the application. The local
+policy checks reviewer role, matching tenant, and separation from the requester.
+The review API receives an ID and looks up the stored proposal; it does not approve
+a client-supplied replacement invocation.
+
+`InventoryPreview.invocation()` describes exactly the annotated reservation:
+tool metadata, requester, resource, context, quantity, and expected version.
+If you change the method's annotation contract, update this backend proposal too.
+The approved-write test catches a mismatch. The example uses an identity normalizer;
+if your application normalizes inputs, prepare the review from the same normalized values.
+
+## What the example proves
+
+The [consumer acceptance tests](src/test/java/example/inventory/InventoryAdoptionTest.java)
+exercise all three methods, no-approval/no-write, eight concurrent retries,
+quantity tampering, consumed-approval reuse with another key, cross-tenant access,
+model identity spoofing, missing context/nested input, reviewer authorization,
+stale resource versions, and read-only audit replay without input/output secrets.
+
+Compile with `maven.compiler.parameters=true`. This example intentionally uses
+flat scalar arguments. Nested DTOs, arrays, and proxy/interface annotation discovery
+are not silently adapted. Record unsupported original signatures in the
+[independent adoption worksheet](../../docs/adoption/2026-09-first-integration.md).
+
+The local inventory lock proves this application's atomic write condition. It does
+not provide cross-process persistence. The in-memory stores lose state on restart.
+For Redis/JDBC contracts and the separate UNKNOWN outcome recovery example, see
+the [integration reference](../../docs/integration-reference.md) and
+[refund walkthrough](../../docs/refund-example.md).
+
+## Verify artifact consumption in isolation
+
+From the SDK checkout, run the maintained PowerShell script (PowerShell 7 via
+`pwsh` on Linux/macOS, or PowerShell on Windows):
+
+```powershell
+.\scripts\verify-adoption.ps1
+```
+
+The script creates a fresh temporary Maven repository by default, clean-builds the
+SDK with sources/Javadoc, copies only this example's POM and source into a separate
+temporary directory, then runs the consumer online and offline. It checks every
+library's main, source and documentation artifact and retains unsigned files under
+`target/candidate/<version>/`. Temporary paths are printed for inspection.
+
+For a repeat build, `-MavenRepository <absolute-path>` reuses downloaded dependencies
+while reinstalling the current SDK. Record whether a run used a fresh or reused
+repository. Neither mode measures an independent developer's integration time.

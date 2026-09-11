@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <!-- Deliberately standalone: no SDK parent and no reactor membership. -->
+  <groupId>example</groupId>
+  <artifactId>spring-ai-adoption</artifactId>
+  <version>1.0-SNAPSHOT</version>
+  <properties>
+    <agent-permit.version>0.4.0-SNAPSHOT</agent-permit.version>
+    <maven.compiler.release>21</maven.compiler.release>
+    <maven.compiler.parameters>true</maven.compiler.parameters>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+  <dependencies>
+    <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-core</artifactId><version>${agent-permit.version}</version></dependency>
+    <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-policy</artifactId><version>${agent-permit.version}</version></dependency>
+    <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-execution</artifactId><version>${agent-permit.version}</version></dependency>
+    <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-approval</artifactId><version>${agent-permit.version}</version></dependency>
+    <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-audit</artifactId><version>${agent-permit.version}</version></dependency>
+    <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-spring-ai</artifactId><version>${agent-permit.version}</version></dependency>
+    <dependency><groupId>org.springframework.ai</groupId><artifactId>spring-ai-model</artifactId><version>2.0.1</version></dependency>
+    <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>5.13.4</version><scope>test</scope></dependency>
+  </dependencies>
+  <build>
+    <plugins>
+      <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.14.1</version></plugin>
+      <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId><version>3.5.4</version></plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId><artifactId>exec-maven-plugin</artifactId><version>3.5.1</version>
+        <executions><execution><id>demo</id><phase>verify</phase><goals><goal>java</goal></goals>
+          <configuration><mainClass>example.inventory.InventoryDemo</mainClass></configuration>
+        </execution></executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

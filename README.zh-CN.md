@@ -145,6 +145,8 @@ AgentPermit4j 保护经过管线的调用。应用负责身份认证、审批人
 | --- | --- |
 | 接入三个真实方法，跑通审批与恢复 | [订单退款示例](docs/refund-example.md) |
 | 配置 Spring AI、Spring Boot、JDBC 或 Redis | [接入配置参考](docs/integration-reference.zh-CN.md) |
+| 在独立工程中消费 SDK 制品 | [三个业务方法接入示例](examples/spring-ai-adoption/README.md) |
+| 验证候选制品与准备发布 | [候选构建和发布检查](docs/releasing.md)、[版本记录](CHANGELOG.md) |
 | 理解信任边界和依赖方向 | [架构说明](docs/architecture.md) |
 | 体验本地控制台 | [Playground 指南](docs/demo-website.md) |
 | 查看已实现内容与验收标准 | [路线图](TODO.md)、[v0.3](docs/iterations/v0.3.md)、[v0.4](docs/iterations/v0.4.md) |

@@ -1,0 +1,39 @@
+# Changelog
+
+## Unreleased — source 0.4.0-SNAPSHOT
+
+### Adoption and candidate preparation (v0.5 iteration)
+
+- A standalone Spring AI consumer registers inventory lookup, preview and reservation
+  through public SDK artifacts, with executable approval, tenant, concurrency and audit checks.
+- A portable PowerShell verification script builds sources/Javadoc, checks candidate
+  artifacts, and verifies a copied consumer online and offline in an isolated Maven repository.
+- CI adds real Redis acceptance and retains unsigned candidate artifacts. An independent
+  developer trial remains pending; the worksheet records original signatures and assistance.
+- Optional candidate and Central signing/publishing profiles prepare distribution.
+  These changes do not indicate that artifacts have been published.
+
+### Business outcome reconciliation (v0.4)
+
+- `ExecutionOutcome` and `ExecutionStatus` distinguish NOT_STARTED, UNKNOWN,
+  SUCCEEDED and FAILED independently of pipeline decision outcomes.
+- The refund example reserves an operation before payment and reconciles matching
+  authoritative evidence without another payment request. Recovery rebuilds services
+  over retained simulator state; it does not demonstrate a killed JVM.
+- Refund example arguments now include an independent operation reference, amount,
+  expected resource version and policy revision. Existing reusable callback APIs remain compatible.
+
+### Reviewed business methods (v0.3)
+
+- `GuardedToolMethods.fromAnnotated` explicitly registers multiple public Spring AI
+  methods and executes them inside the guarded idempotency owner.
+- Approval services add identified review, application-defined reviewer authorization,
+  and decision receipts. Reviewed requests cannot use the legacy approval shortcut.
+- JDBC reviewed approval requires the additive review schema. Older binaries reject
+  the new states and must not serve reviewed flows.
+
+## v0.2.0 — Git tag, 2026-09-02
+
+Spring AI/Boot/Security integration, JDBC approval/audit, Redis result idempotency,
+and a live local Playground. The tag is not evidence of a GitHub Release or a
+published Maven dependency. Current source integration is documented in the README.

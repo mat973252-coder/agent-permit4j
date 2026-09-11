@@ -17,4 +17,30 @@
       <version>${project.version}</version>
     </dependency>
   </dependencies>
+  <profiles>
+    <profile>
+      <id>candidate</id>
+      <build>
+        <plugins>
+          <!-- This dependency-only module has no Java API for javadoc:jar to render. -->
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-jar-plugin</artifactId>
+            <version>3.4.1</version>
+            <executions>
+              <execution>
+                <id>dependency-only-javadoc</id>
+                <phase>package</phase>
+                <goals><goal>jar</goal></goals>
+                <configuration>
+                  <classifier>javadoc</classifier>
+                  <classesDirectory>${project.basedir}/src/main/javadoc</classesDirectory>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>
