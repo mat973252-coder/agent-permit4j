@@ -1,7 +1,9 @@
 # Candidate artifacts and publication
 
-The current source remains `0.4.0-SNAPSHOT`; v0.5 adoption work is in progress.
-The next release number is not yet assigned. A Git tag, a GitHub Release, local
+The prepared release version is `0.5.0`; it has not yet been published.
+On 2026-09-22 the maintainer deferred independent developer trials and authorized
+release after maintainer validation. The trial remains unmeasured, not completed.
+A Git tag, a GitHub Release, local
 Maven installation, and public Maven repository availability are separate states.
 
 ## Local candidate checks
@@ -42,12 +44,13 @@ a disposable instance, never a shared or application Redis database.
 2. Run the full Maven Wrapper verify, the real Redis suite from the
    [integration reference](integration-reference.md#redis-result-idempotency),
    and the isolated consumer checks against those exact candidate artifacts.
-3. Confirm namespace ownership for `io.github.mat973252`, configure a Central
+3. Reconfirm namespace ownership for `io.github.agentpermit4j` (Portal showed Verified
+   on 2026-09-22 under the `mat973252-coder` GitHub sign-in), configure a Central
    Portal token in the maintainer's Maven `settings.xml` server named `central`,
    and make the maintainer's signing key available through GPG/agent facilities.
    Never put credentials or signing material in repository files or command output.
 4. Verify the security report channel and supported version statement in
-   [SECURITY.md](../SECURITY.md). As checked on 2026-09-11, private reporting is disabled.
+   [SECURITY.md](../SECURITY.md). Private reporting was enabled and verified on 2026-09-22.
 5. Use both profiles for an intentional publication invocation:
 
    ```powershell

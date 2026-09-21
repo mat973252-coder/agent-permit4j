@@ -1,9 +1,9 @@
 package example.inventory;
 
-import io.github.mat973252.agentpermit.core.RiskLevel;
-import io.github.mat973252.agentpermit.core.ToolEffect;
-import io.github.mat973252.agentpermit.springai.AgentPermit;
-import io.github.mat973252.agentpermit.springai.SpringAiToolContextKeys;
+import io.github.agentpermit4j.core.RiskLevel;
+import io.github.agentpermit4j.core.ToolEffect;
+import io.github.agentpermit4j.springai.AgentPermit;
+import io.github.agentpermit4j.springai.SpringAiToolContextKeys;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 

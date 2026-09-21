@@ -7,18 +7,18 @@
   <artifactId>spring-ai-adoption</artifactId>
   <version>1.0-SNAPSHOT</version>
   <properties>
-    <agent-permit.version>0.4.0-SNAPSHOT</agent-permit.version>
+    <agent-permit.version>0.5.0</agent-permit.version>
     <maven.compiler.release>21</maven.compiler.release>
     <maven.compiler.parameters>true</maven.compiler.parameters>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
   <dependencies>
-    <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-core</artifactId><version>${agent-permit.version}</version></dependency>
-    <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-policy</artifactId><version>${agent-permit.version}</version></dependency>
-    <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-execution</artifactId><version>${agent-permit.version}</version></dependency>
-    <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-approval</artifactId><version>${agent-permit.version}</version></dependency>
-    <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-audit</artifactId><version>${agent-permit.version}</version></dependency>
-    <dependency><groupId>io.github.mat973252</groupId><artifactId>agent-permit-spring-ai</artifactId><version>${agent-permit.version}</version></dependency>
+    <dependency><groupId>io.github.agentpermit4j</groupId><artifactId>agent-permit-core</artifactId><version>${agent-permit.version}</version></dependency>
+    <dependency><groupId>io.github.agentpermit4j</groupId><artifactId>agent-permit-policy</artifactId><version>${agent-permit.version}</version></dependency>
+    <dependency><groupId>io.github.agentpermit4j</groupId><artifactId>agent-permit-execution</artifactId><version>${agent-permit.version}</version></dependency>
+    <dependency><groupId>io.github.agentpermit4j</groupId><artifactId>agent-permit-approval</artifactId><version>${agent-permit.version}</version></dependency>
+    <dependency><groupId>io.github.agentpermit4j</groupId><artifactId>agent-permit-audit</artifactId><version>${agent-permit.version}</version></dependency>
+    <dependency><groupId>io.github.agentpermit4j</groupId><artifactId>agent-permit-spring-ai</artifactId><version>${agent-permit.version}</version></dependency>
     <dependency><groupId>org.springframework.ai</groupId><artifactId>spring-ai-model</artifactId><version>2.0.1</version></dependency>
     <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>5.13.4</version><scope>test</scope></dependency>
   </dependencies>

@@ -74,9 +74,9 @@ Spring Boot 4 应用可以直接依赖 starter：
 
 ```xml
 <dependency>
-  <groupId>io.github.mat973252</groupId>
+  <groupId>io.github.agentpermit4j</groupId>
   <artifactId>agent-permit-spring-boot-starter</artifactId>
-  <version>0.4.0-SNAPSHOT</version>
+  <version>0.5.0</version>
 </dependency>
 ```
 
@@ -110,7 +110,7 @@ var approvals =
         new InvocationFingerprinter());
 ```
 
-构造服务前，应用需要通过自己的迁移工具执行随包提供的 `io/github/mat973252/agentpermit/jdbc/approval-schema.sql`。适配器不会在启动时偷偷创建或修改生产表。H2 是 JDBC 适配器的测试依赖和本地 Playground 的运行依赖，不会作为 JDBC 库的运行依赖传递给应用。
+构造服务前，应用需要通过自己的迁移工具执行随包提供的 `io/github/agentpermit4j/jdbc/approval-schema.sql`。适配器不会在启动时偷偷创建或修改生产表。H2 是 JDBC 适配器的测试依赖和本地 Playground 的运行依赖，不会作为 JDBC 库的运行依赖传递给应用。
 
 JDBC 服务实现现有 `ApprovalVerifier`，保持与内存实现一致的稳定原因码，并继续使用相同的版本化调用指纹。存储异常统一 fail-closed 为 `APPROVAL_STORAGE_UNAVAILABLE`。并发批准采用条件更新，因此只有一个调用方得到 `APPROVAL_APPROVED`，其余调用方得到幂等的 `APPROVAL_ALREADY_APPROVED`。
 
@@ -125,7 +125,7 @@ var auditLog =
     new JdbcAuditLog(dataSource, () -> UUID.randomUUID().toString());
 ```
 
-使用前，应用需要通过自己的迁移工具执行 `io/github/mat973252/agentpermit/jdbc/audit-schema.sql`；适配器不会隐式建表。管线时间线的序列号仍只由 `InvocationAuditTrail` 分配，JDBC 原样保存传入序列。联合主键 `(timeline_id, event_sequence)` 会拒绝重复追加，`replaySafeView` 则返回按序列排列的不可变视图。
+使用前，应用需要通过自己的迁移工具执行 `io/github/agentpermit4j/jdbc/audit-schema.sql`；适配器不会隐式建表。管线时间线的序列号仍只由 `InvocationAuditTrail` 分配，JDBC 原样保存传入序列。联合主键 `(timeline_id, event_sequence)` 会拒绝重复追加，`replaySafeView` 则返回按序列排列的不可变视图。
 
 表中只包含时间线 ID、序列、阶段、工具、主体、租户、状态、稳定原因码和终态结果；原始参数、工具输出、审批号、幂等键、指纹和异常文本均不会入库。同步存储失败会抛出通用的 `IllegalStateException("audit storage unavailable")`，既不静默丢事件，也不暴露驱动细节。若外部副作用完成后审计写入失败，错误仍会向上传播；需要跨进程重试保护的调用方必须提供 Redis 结果 guard 和稳定幂等键。
 

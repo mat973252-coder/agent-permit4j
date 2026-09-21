@@ -86,7 +86,10 @@ The web console uses synthetic scenarios and mock side effects; the refund recov
 
 ## Integrate with Spring AI
 
-**Current source version: `0.4.0-SNAPSHOT` · Java 21 · Spring AI 2.0.1 · Spring Boot 4.0.8**
+**Prepared release: `0.5.0` (not yet published) · Java 21 · Spring AI 2.0.1 · Spring Boot 4.0.8**
+
+Java packages and Maven groupId now use `io.github.agentpermit4j`.
+Existing consumers must update dependency coordinates, imports and resource paths and recompile. See the [migration notes](CHANGELOG.md#breaking-java-namespace-migration).
 
 Install this checkout into your local Maven repository:
 
@@ -98,13 +101,13 @@ Then add the adapter to your application:
 
 ```xml
 <dependency>
-  <groupId>io.github.mat973252</groupId>
+  <groupId>io.github.agentpermit4j</groupId>
   <artifactId>agent-permit-spring-ai</artifactId>
-  <version>0.4.0-SNAPSHOT</version>
+  <version>0.5.0</version>
 </dependency>
 ```
 
-The snapshot is a source-build dependency. A [`v0.2.0` Git tag](https://github.com/mat973252-coder/agent-permit4j/tree/v0.2.0) exists, but these newer APIs are not in that tag. Do not assume either version is available from Maven Central.
+The prepared release currently requires a source build. A [`v0.2.0` Git tag](https://github.com/mat973252-coder/agent-permit4j/tree/v0.2.0) exists, but these newer APIs are not in that tag. Do not assume either version is available from Maven Central.
 
 ### Register existing business methods
 
@@ -122,7 +125,7 @@ var callbacks = GuardedToolMethods.fromAnnotated(dependencies, orderTools);
 
 The factory invokes each method **inside** the execution pipeline. Compile tool classes with `-parameters`; the current mapper accepts flat scalar arguments. Registration is explicit, with no classpath scanning or proxy/interface annotation discovery.
 
-Start with the working [three-tool example](docs/refund-example.md) and its [RefundTools implementation](agent-permit-playground/src/main/java/io/github/mat973252/agentpermit/playground/refund/RefundTools.java). The [configuration reference](docs/integration-reference.md) covers annotation limits, custom denial codes, the lower-level callback API, Spring Boot wiring, and the optional Spring Security bridge. Adding the starter alone does not supply policies or automatically protect existing tools.
+Start with the working [three-tool example](docs/refund-example.md) and its [RefundTools implementation](agent-permit-playground/src/main/java/io/github/agentpermit4j/playground/refund/RefundTools.java). The [configuration reference](docs/integration-reference.md) covers annotation limits, custom denial codes, the lower-level callback API, Spring Boot wiring, and the optional Spring Security bridge. Adding the starter alone does not supply policies or automatically protect existing tools.
 
 ## Guarantees and limits
 

@@ -74,9 +74,9 @@ Spring Boot 4 applications can depend on the convenience starter:
 
 ```xml
 <dependency>
-  <groupId>io.github.mat973252</groupId>
+  <groupId>io.github.agentpermit4j</groupId>
   <artifactId>agent-permit-spring-boot-starter</artifactId>
-  <version>0.4.0-SNAPSHOT</version>
+  <version>0.5.0</version>
 </dependency>
 ```
 
@@ -110,7 +110,7 @@ var approvals =
         new InvocationFingerprinter());
 ```
 
-Apply the bundled `io/github/mat973252/agentpermit/jdbc/approval-schema.sql` with the application's migration tool before constructing the service. The adapter never creates or changes production tables implicitly. H2 is a test dependency of the JDBC adapter and a runtime dependency of the local Playground example; it is not a transitive runtime dependency of the JDBC library.
+Apply the bundled `io/github/agentpermit4j/jdbc/approval-schema.sql` with the application's migration tool before constructing the service. The adapter never creates or changes production tables implicitly. H2 is a test dependency of the JDBC adapter and a runtime dependency of the local Playground example; it is not a transitive runtime dependency of the JDBC library.
 
 The JDBC service implements the existing `ApprovalVerifier`, preserves the in-memory reason codes, binds approval to the same versioned fingerprint, and treats storage failures as `APPROVAL_STORAGE_UNAVAILABLE`. Concurrent approval uses a conditional update, so one caller receives `APPROVAL_APPROVED` and later callers receive the idempotent `APPROVAL_ALREADY_APPROVED`.
 
@@ -125,7 +125,7 @@ var auditLog =
     new JdbcAuditLog(dataSource, () -> UUID.randomUUID().toString());
 ```
 
-Apply `io/github/mat973252/agentpermit/jdbc/audit-schema.sql` with the application's migration tool first. The adapter performs no implicit DDL. `InvocationAuditTrail` remains the only sequence source for pipeline timelines; JDBC stores the supplied sequence verbatim. The composite primary key `(timeline_id, event_sequence)` rejects duplicate appends, and `replaySafeView` returns an immutable sequence-ordered view.
+Apply `io/github/agentpermit4j/jdbc/audit-schema.sql` with the application's migration tool first. The adapter performs no implicit DDL. `InvocationAuditTrail` remains the only sequence source for pipeline timelines; JDBC stores the supplied sequence verbatim. The composite primary key `(timeline_id, event_sequence)` rejects duplicate appends, and `replaySafeView` returns an immutable sequence-ordered view.
 
 The table contains only the timeline ID, sequence, stage, tool, principal, tenant, status, stable reason code, and terminal outcome. Raw arguments, tool output, approval IDs, idempotency keys, fingerprints, and exception text are never written. Synchronous storage failures throw the generic `IllegalStateException("audit storage unavailable")` instead of silently losing an event or exposing driver details. If an audit write fails after an external side effect, the error still propagates; callers that need cross-process retry protection must supply the Redis result guard and a stable idempotency key.
 

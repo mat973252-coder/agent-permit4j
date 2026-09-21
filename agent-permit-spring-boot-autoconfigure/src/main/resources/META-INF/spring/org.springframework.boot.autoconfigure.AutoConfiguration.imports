@@ -1,2 +1,2 @@
-io.github.mat973252.agentpermit.springai.autoconfigure.AgentPermitSpringSecurityAutoConfiguration
-io.github.mat973252.agentpermit.springai.autoconfigure.AgentPermitSpringAiAutoConfiguration
+io.github.agentpermit4j.springai.autoconfigure.AgentPermitSpringSecurityAutoConfiguration
+io.github.agentpermit4j.springai.autoconfigure.AgentPermitSpringAiAutoConfiguration

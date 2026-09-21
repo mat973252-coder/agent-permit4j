@@ -1,0 +1,115 @@
+package io.github.agentpermit4j.playground;
+
+import io.github.agentpermit4j.approval.InMemoryApprovalService;
+import io.github.agentpermit4j.approval.InvocationFingerprinter;
+import io.github.agentpermit4j.core.Action;
+import io.github.agentpermit4j.core.DataSensitivity;
+import io.github.agentpermit4j.core.InvocationContext;
+import io.github.agentpermit4j.core.Principal;
+import io.github.agentpermit4j.core.Resource;
+import io.github.agentpermit4j.core.Reversibility;
+import io.github.agentpermit4j.core.ToolDescriptor;
+import io.github.agentpermit4j.core.ToolEffect;
+import io.github.agentpermit4j.core.ToolInvocation;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.HashMap;
+import java.util.Map;
+
+final class PlaygroundFixtures {
+
+  private PlaygroundFixtures() {}
+
+  static ToolInvocation file(String action, String path, Map<String, String> arguments) {
+    return invocation(
+        new ToolDescriptor(
+            "file.system",
+            ToolEffect.WRITE,
+            Reversibility.COMPENSATABLE,
+            DataSensitivity.INTERNAL),
+        new Action(action),
+        new Resource("file", path, Map.of()),
+        "local",
+        arguments);
+  }
+
+  static ToolInvocation sql(String statement) {
+    return invocation(
+        new ToolDescriptor(
+            "database.sql",
+            ToolEffect.WRITE,
+            Reversibility.COMPENSATABLE,
+            DataSensitivity.CONFIDENTIAL),
+        new Action("sql.execute"),
+        new Resource("sql", "db://playground", Map.of()),
+        "local",
+        Map.of("statement", statement));
+  }
+
+  static ToolInvocation deployment(String environment) {
+    return invocation(
+        new ToolDescriptor(
+            "deployment.apply",
+            ToolEffect.EXECUTE,
+            Reversibility.COMPENSATABLE,
+            DataSensitivity.INTERNAL),
+        new Action("deployment.apply"),
+        new Resource("deployment", "service://checkout", Map.of()),
+        environment,
+        Map.of("version", "1.2.3"));
+  }
+
+  static ToolInvocation http(String method, String uri, String payload) {
+    var arguments = new HashMap<String, String>();
+    arguments.put("method", method);
+    if (!payload.isEmpty()) {
+      arguments.put("payload", payload);
+    }
+    return invocation(
+        new ToolDescriptor(
+            "http.request",
+            ToolEffect.EXECUTE,
+            Reversibility.COMPENSATABLE,
+            DataSensitivity.INTERNAL),
+        new Action("http.request"),
+        new Resource("http", uri, Map.of()),
+        "local",
+        arguments);
+  }
+
+  static ToolInvocation messaging(String destination, String body) {
+    return invocation(
+        new ToolDescriptor(
+            "message.send",
+            ToolEffect.WRITE,
+            Reversibility.IRREVERSIBLE,
+            DataSensitivity.CONFIDENTIAL),
+        new Action("message.send"),
+        new Resource("messaging", destination, Map.of()),
+        "local",
+        Map.of("body", body));
+  }
+
+  static InMemoryApprovalService approvals(String requestId) {
+    return new InMemoryApprovalService(
+        Clock.fixed(Instant.parse("2026-08-26T00:00:00Z"), ZoneOffset.UTC),
+        () -> requestId,
+        new InvocationFingerprinter());
+  }
+
+  private static ToolInvocation invocation(
+      ToolDescriptor descriptor,
+      Action action,
+      Resource resource,
+      String environment,
+      Map<String, String> arguments) {
+    return new ToolInvocation(
+        descriptor,
+        new Principal("workspace-agent", Map.of("role", "developer")),
+        action,
+        resource,
+        new InvocationContext("playground", environment),
+        arguments);
+  }
+}

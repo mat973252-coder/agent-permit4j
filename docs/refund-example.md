@@ -1,6 +1,6 @@
 # Three guarded business tools: order refunds
 
-This source-checkout example targets v0.4.0-SNAPSHOT. It uses synthetic identities,
+This source-checkout example targets the prepared v0.5.0 release. It uses synthetic identities,
 an embedded H2 business ledger, JDBC approval and audit adapters, and an in-process
 payment simulator. No LLM, credentials, network, or real payments are required.
 
@@ -93,7 +93,7 @@ var receipt = approvals.decision(request.id());
 ```
 
 Apply both `approval-schema.sql` and the additive `approval-review-schema.sql`
-from `io/github/mat973252/agentpermit/jdbc/` using the application's migration
+from `io/github/agentpermit4j/jdbc/` using the application's migration
 tool. Existing legacy requests continue using the original table and APIs.
 The new review table contains only request ID, approver ID, tenant ID, and decision
 time. JDBC writes that record and the approval state in one transaction. A failed

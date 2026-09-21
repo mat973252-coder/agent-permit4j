@@ -1,9 +1,9 @@
 package example.inventory;
 
-import io.github.mat973252.agentpermit.approval.InMemoryApprovalService;
-import io.github.mat973252.agentpermit.core.GateDecision;
-import io.github.mat973252.agentpermit.core.Principal;
-import io.github.mat973252.agentpermit.springai.SpringAiToolContextKeys;
+import io.github.agentpermit4j.approval.InMemoryApprovalService;
+import io.github.agentpermit4j.core.GateDecision;
+import io.github.agentpermit4j.core.Principal;
+import io.github.agentpermit4j.springai.SpringAiToolContextKeys;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;

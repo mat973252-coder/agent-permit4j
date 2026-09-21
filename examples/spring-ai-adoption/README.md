@@ -17,7 +17,7 @@ Install the SDK, then build this example in a separate Maven invocation:
 
 On Linux/macOS, use `./mvnw` with the same arguments. The example also works with
 an installed Maven when copied outside this repository: `mvn -B -ntp verify`.
-Current dependency: `0.4.0-SNAPSHOT`, installed from source. It is not a promise
+Current dependency: `0.5.0` (prepared, not yet published), installed from source. It is not a promise
 that this version is available from Maven Central.
 
 The tests and terminal demonstration print:

@@ -86,7 +86,10 @@ Web 控制台使用合成场景与 mock 副作用；退款恢复示例在终端�
 
 ## 接入 Spring AI
 
-**当前源码：`0.4.0-SNAPSHOT` · Java 21 · Spring AI 2.0.1 · Spring Boot 4.0.8**
+**待发布版本：`0.5.0`（尚未发布） · Java 21 · Spring AI 2.0.1 · Spring Boot 4.0.8**
+
+Java 包名与 Maven groupId 已统一为 `io.github.agentpermit4j`。
+已有消费方需要更新依赖坐标、import、资源路径并重新编译，详见[迁移说明](CHANGELOG.md#breaking-java-namespace-migration)。
 
 先将当前源码安装到本地 Maven 仓库：
 
@@ -98,13 +101,13 @@ Web 控制台使用合成场景与 mock 副作用；退款恢复示例在终端�
 
 ```xml
 <dependency>
-  <groupId>io.github.mat973252</groupId>
+  <groupId>io.github.agentpermit4j</groupId>
   <artifactId>agent-permit-spring-ai</artifactId>
-  <version>0.4.0-SNAPSHOT</version>
+  <version>0.5.0</version>
 </dependency>
 ```
 
-该 snapshot 依赖需要从源码构建。仓库存在 [`v0.2.0` Git 标签](https://github.com/mat973252-coder/agent-permit4j/tree/v0.2.0)，但不包含这些新 API；请勿假定这两个版本已在 Maven Central 发布。
+该待发布版本目前仍需从源码构建。仓库存在 [`v0.2.0` Git 标签](https://github.com/mat973252-coder/agent-permit4j/tree/v0.2.0)，但不包含这些新 API；请勿假定这两个版本已在 Maven Central 发布。
 
 ### 注册已有业务方法
 
@@ -122,7 +125,7 @@ var callbacks = GuardedToolMethods.fromAnnotated(dependencies, orderTools);
 
 工厂在执行管线**内部**调用业务方法。工具类需使用 `-parameters` 编译；当前参数映射支持扁平标量。注册对象由应用显式指定，不扫描 classpath，也不提供代理或接口注解发现。
 
-从可运行的[三个业务工具示例](docs/refund-example.md)及 [RefundTools 实现](agent-permit-playground/src/main/java/io/github/mat973252/agentpermit/playground/refund/RefundTools.java)开始接入。[配置参考](docs/integration-reference.zh-CN.md)包含注解限制、自定义拒绝码、底层 callback API、Spring Boot 装配和可选的 Spring Security 桥接。仅添加 starter 不会自动提供策略或保护已有工具。
+从可运行的[三个业务工具示例](docs/refund-example.md)及 [RefundTools 实现](agent-permit-playground/src/main/java/io/github/agentpermit4j/playground/refund/RefundTools.java)开始接入。[配置参考](docs/integration-reference.zh-CN.md)包含注解限制、自定义拒绝码、底层 callback API、Spring Boot 装配和可选的 Spring Security 桥接。仅添加 starter 不会自动提供策略或保护已有工具。
 
 ## 保证与边界
 

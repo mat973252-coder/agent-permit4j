@@ -1,6 +1,18 @@
 # Changelog
 
-## Unreleased — source 0.4.0-SNAPSHOT
+## 0.5.0 — prepared, not yet published
+
+### Breaking Java namespace migration
+
+- Java packages move from `io.github.mat973252.agentpermit` to `io.github.agentpermit4j`.
+  Update imports, fully qualified class names, reflection/configuration references and
+  recompile consumers; old binaries are not compatible and no compatibility aliases are provided.
+- Bundled JDBC SQL and Redis Lua resources move from `io/github/mat973252/agentpermit/`
+  to `io/github/agentpermit4j/`. Update application migration resource paths; SQL contents,
+  database schemas, approval fingerprints and Redis keys/record formats are unchanged.
+- Maven groupId moves from `io.github.mat973252` to the verified `io.github.agentpermit4j`
+  namespace. Update all SDK dependency coordinates; no relocation artifacts have been published.
+  The GitHub organization is now `agentpermit4j`; the source repository has not been transferred.
 
 ### Adoption and candidate preparation (v0.5 iteration)
 

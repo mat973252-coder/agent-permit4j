@@ -2,6 +2,14 @@
 
 The backlog is ordered by proof of value. Each item includes an observable acceptance check.
 
+## Package naming migration (planned 2026-09-19)
+
+Ownership check and execution order: [docs/iterations/package-namespace.md](docs/iterations/package-namespace.md).
+
+- [x] Review and migrate the public Java package namespace away from the personal `io.github.mat973252.agentpermit` prefix before a stable release.
+  - Migrated Java packages and Maven groupId to `io.github.agentpermit4j`. GitHub organization ownership and Central Portal namespace verification completed on 2026-09-22; namespace verification does not mean artifacts are published.
+  - Verify: update source/test packages, imports, reflection/configuration references, examples and documentation consistently; document source/binary compatibility impact and pass the full Maven verification. Keep this migration separate from Redis validation changes.
+
 ## Repository bootstrap
 
 - [x] Establish the initial six-module Maven structure and Java 21 baseline.
@@ -84,12 +92,13 @@ Iteration plan: [docs/iterations/v0.5.md](docs/iterations/v0.5.md).
   - Verify: resolve SDK artifacts without the SDK parent POM, Playground dependencies, or reactor source access; prove approval and same-key retry behavior in an isolated consumer build.
 
 - [ ] Have an independent developer integrate three existing Spring AI methods using the walkthrough.
+  - Deferred by the maintainer on 2026-09-22; no longer a gate for 0.5.0. Keep the trial unmeasured and use full verification, real Redis and isolated consumer checks as the release gate.
   - Verify: record original signatures, integration time, extra wiring, maintainer assistance, and unsupported signatures; automated consumer tests do not replace this unmeasured adoption check.
 - [ ] Use that evidence to fix at most one observed adoption obstacle.
   - Verify: a failing consumer example demonstrates the obstacle, and the smallest documentation, wiring, DTO, or proxy change resolves it while preserving security contracts.
 - [x] Prepare unsigned candidate artifacts and verify local artifact consumption.
   - Verify: the candidate profile produces 41 library files, the isolated consumer passes online and offline, and release/adoption instructions distinguish completed checks from pending publication.
-- [ ] Complete signed publication and public-repository consumption after adoption review.
+- [ ] Complete signed publication and public-repository consumption after maintainer validation (independent adoption deferred on 2026-09-22).
   - Verify: assign the release version, validate signing and Portal access, confirm the private reporting channel, publish, and resolve the released artifacts from an empty Maven repository without source install.
 - [x] Complete automated candidate regression evidence, including the opt-in real Redis suite.
   - Verify: full Maven Wrapper verify, the standalone consumer, and five real Redis acceptance cases pass. Actual adopter results and publication remain separate unfinished gates above.

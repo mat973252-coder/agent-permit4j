@@ -1,6 +1,6 @@
 package example.inventory;
 
-import io.github.mat973252.agentpermit.core.Principal;
+import io.github.agentpermit4j.core.Principal;
 import java.time.Clock;
 import java.util.Map;
 import org.springframework.ai.util.JsonHelper;

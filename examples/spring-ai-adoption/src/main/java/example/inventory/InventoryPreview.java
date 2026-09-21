@@ -1,14 +1,14 @@
 package example.inventory;
 
-import io.github.mat973252.agentpermit.core.Action;
-import io.github.mat973252.agentpermit.core.DataSensitivity;
-import io.github.mat973252.agentpermit.core.InvocationContext;
-import io.github.mat973252.agentpermit.core.Principal;
-import io.github.mat973252.agentpermit.core.Resource;
-import io.github.mat973252.agentpermit.core.Reversibility;
-import io.github.mat973252.agentpermit.core.ToolDescriptor;
-import io.github.mat973252.agentpermit.core.ToolEffect;
-import io.github.mat973252.agentpermit.core.ToolInvocation;
+import io.github.agentpermit4j.core.Action;
+import io.github.agentpermit4j.core.DataSensitivity;
+import io.github.agentpermit4j.core.InvocationContext;
+import io.github.agentpermit4j.core.Principal;
+import io.github.agentpermit4j.core.Resource;
+import io.github.agentpermit4j.core.Reversibility;
+import io.github.agentpermit4j.core.ToolDescriptor;
+import io.github.agentpermit4j.core.ToolEffect;
+import io.github.agentpermit4j.core.ToolInvocation;
 import java.util.Map;
 
 /** An immutable, backend-owned proposal. A browser must not supply the review invocation. */

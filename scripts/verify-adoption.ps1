@@ -28,13 +28,13 @@ if ($LASTEXITCODE -ne 0) { throw "SDK candidate build failed; evidence retained 
 $artifactRoot = Join-Path $projectRoot 'target/candidate'
 $bundle = Join-Path $artifactRoot $sdkVersion
 New-Item -ItemType Directory -Path $bundle -Force | Out-Null
-$parentPom = Join-Path $MavenRepository "io/github/mat973252/agent-permit4j/$sdkVersion/agent-permit4j-$sdkVersion.pom"
+$parentPom = Join-Path $MavenRepository "io/github/agentpermit4j/agent-permit4j/$sdkVersion/agent-permit4j-$sdkVersion.pom"
 Copy-Item -LiteralPath $parentPom -Destination $bundle
 foreach ($module in $sdkPom.project.modules.module) {
     if ($module -eq 'agent-permit-playground') { continue }
     foreach ($suffix in @('.pom', '.jar', '-sources.jar', '-javadoc.jar')) {
         $name = "$module-$sdkVersion$suffix"
-        $artifact = Join-Path $MavenRepository "io/github/mat973252/$module/$sdkVersion/$name"
+        $artifact = Join-Path $MavenRepository "io/github/agentpermit4j/$module/$sdkVersion/$name"
         if (-not (Test-Path -LiteralPath $artifact -PathType Leaf)) { throw "Missing candidate artifact: $name" }
         Copy-Item -LiteralPath $artifact -Destination $bundle
     }
