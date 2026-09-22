@@ -86,18 +86,12 @@ Web 控制台使用合成场景与 mock 副作用；退款恢复示例在终端�
 
 ## 接入 Spring AI
 
-**待发布版本：`0.5.0`（尚未发布） · Java 21 · Spring AI 2.0.1 · Spring Boot 4.0.8**
+**正式版本：`0.5.0` · Java 21 · Spring AI 2.0.1 · Spring Boot 4.0.8**
 
 Java 包名与 Maven groupId 已统一为 `io.github.agentpermit4j`。
 已有消费方需要更新依赖坐标、import、资源路径并重新编译，详见[迁移说明](CHANGELOG.md#breaking-java-namespace-migration)。
 
-先将当前源码安装到本地 Maven 仓库：
-
-```bash
-./mvnw -B -ntp -DskipTests install
-```
-
-然后在应用中添加适配器依赖：
+直接在应用中添加 Maven Central 上的适配器依赖：
 
 ```xml
 <dependency>
@@ -107,7 +101,7 @@ Java 包名与 Maven groupId 已统一为 `io.github.agentpermit4j`。
 </dependency>
 ```
 
-该待发布版本目前仍需从源码构建。仓库存在 [`v0.2.0` Git 标签](https://github.com/mat973252-coder/agent-permit4j/tree/v0.2.0)，但不包含这些新 API；请勿假定这两个版本已在 Maven Central 发布。
+0.5.0 已[发布到 Maven Central](https://repo.maven.apache.org/maven2/io/github/agentpermit4j/agent-permit-spring-ai/0.5.0/)，无需先从源码安装。
 
 ### 注册已有业务方法
 

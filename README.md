@@ -86,18 +86,12 @@ The web console uses synthetic scenarios and mock side effects; the refund recov
 
 ## Integrate with Spring AI
 
-**Prepared release: `0.5.0` (not yet published) · Java 21 · Spring AI 2.0.1 · Spring Boot 4.0.8**
+**Release: `0.5.0` · Java 21 · Spring AI 2.0.1 · Spring Boot 4.0.8**
 
 Java packages and Maven groupId now use `io.github.agentpermit4j`.
 Existing consumers must update dependency coordinates, imports and resource paths and recompile. See the [migration notes](CHANGELOG.md#breaking-java-namespace-migration).
 
-Install this checkout into your local Maven repository:
-
-```bash
-./mvnw -B -ntp -DskipTests install
-```
-
-Then add the adapter to your application:
+Add the adapter from Maven Central to your application:
 
 ```xml
 <dependency>
@@ -107,7 +101,7 @@ Then add the adapter to your application:
 </dependency>
 ```
 
-The prepared release currently requires a source build. A [`v0.2.0` Git tag](https://github.com/mat973252-coder/agent-permit4j/tree/v0.2.0) exists, but these newer APIs are not in that tag. Do not assume either version is available from Maven Central.
+Version 0.5.0 is [available from Maven Central](https://repo.maven.apache.org/maven2/io/github/agentpermit4j/agent-permit-spring-ai/0.5.0/). No local source installation is required.
 
 ### Register existing business methods
 

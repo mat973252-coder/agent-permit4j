@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.5.0 — prepared, not yet published
+## 0.5.0 — 2026-09-22
 
 ### Breaking Java namespace migration
 
@@ -22,8 +22,9 @@
   artifacts, and verifies a copied consumer online and offline in an isolated Maven repository.
 - CI adds real Redis acceptance and retains unsigned candidate artifacts. An independent
   developer trial remains pending; the worksheet records original signatures and assistance.
-- Optional candidate and Central signing/publishing profiles prepare distribution.
-  These changes do not indicate that artifacts have been published.
+- Version 0.5.0 is published on Maven Central with sources, Javadoc and GPG signatures.
+  A standalone consumer downloaded the public artifacts into an empty Maven repository
+  and passed all 10 tests online and offline. The independent developer trial is deferred.
 
 ### Business outcome reconciliation (v0.4)
 
