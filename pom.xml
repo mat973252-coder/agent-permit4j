@@ -11,7 +11,7 @@
 
   <name>AgentPermit4j</name>
   <description>A trusted action execution layer for Java agents.</description>
-  <url>https://github.com/mat973252-coder/agent-permit4j</url>
+  <url>https://github.com/mat973252/agent-permit4j</url>
 
   <properties>
     <jsqlparser.version>5.3</jsqlparser.version>
@@ -51,16 +51,16 @@
 
   <developers>
     <developer>
-      <id>mat973252-coder</id>
-      <name>mat973252-coder</name>
-      <url>https://github.com/mat973252-coder</url>
+      <id>mat973252</id>
+      <name>Mat</name>
+      <url>https://github.com/mat973252</url>
     </developer>
   </developers>
 
   <scm>
-    <connection>scm:git:https://github.com/mat973252-coder/agent-permit4j.git</connection>
-    <developerConnection>scm:git:https://github.com/mat973252-coder/agent-permit4j.git</developerConnection>
-    <url>https://github.com/mat973252-coder/agent-permit4j</url>
+    <connection>scm:git:https://github.com/mat973252/agent-permit4j.git</connection>
+    <developerConnection>scm:git:https://github.com/mat973252/agent-permit4j.git</developerConnection>
+    <url>https://github.com/mat973252/agent-permit4j</url>
   </scm>
 
   <build>

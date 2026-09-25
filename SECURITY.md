@@ -3,7 +3,7 @@
 Please do not disclose suspected vulnerabilities in a public issue.
 
 GitHub private vulnerability reporting was enabled and verified on 2026-09-22.
-Use [Report a vulnerability](https://github.com/mat973252-coder/agent-permit4j/security/advisories/new)
+Use [Report a vulnerability](https://github.com/mat973252/agent-permit4j/security/advisories/new)
 or the repository's Security tab to report privately.
 
 Never include secrets, production data, or working exploit payloads in reports.

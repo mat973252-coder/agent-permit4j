@@ -2,7 +2,7 @@
 
 **Approve the exact action. Execute through policy. Keep retries from repeating it.**
 
-[![Build](https://github.com/mat973252-coder/agent-permit4j/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/mat973252-coder/agent-permit4j/actions/workflows/build.yml)
+[![Build](https://github.com/mat973252/agent-permit4j/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/mat973252/agent-permit4j/actions/workflows/build.yml)
 [![Java 21](https://img.shields.io/badge/Java-21-blue)](pom.xml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
@@ -50,7 +50,7 @@ Audit events accompany the decision stages. Identity, tenant, environment, appro
 You need **JDK 21** and Git. The repository includes Maven Wrapper. The first build downloads dependencies; the demos need no LLM key, Node.js, external database, or payment account.
 
 ```bash
-git clone https://github.com/mat973252-coder/agent-permit4j.git
+git clone https://github.com/mat973252/agent-permit4j.git
 cd agent-permit4j
 ./mvnw -B -ntp -pl agent-permit-playground -am verify
 ```
@@ -172,7 +172,7 @@ Bug reports, integration feedback, and focused pull requests are welcome. Read [
 
 Windows: `.\mvnw.cmd -B -ntp verify`. The default suite uses deterministic fakes; the [real Redis acceptance suite](docs/integration-reference.md#redis-result-idempotency) is opt-in.
 
-Report reproducible problems through [GitHub Issues](https://github.com/mat973252-coder/agent-permit4j/issues). For vulnerabilities, follow [SECURITY.md](SECURITY.md).
+Report reproducible problems through [GitHub Issues](https://github.com/mat973252/agent-permit4j/issues). For vulnerabilities, follow [SECURITY.md](SECURITY.md).
 
 ## License
 

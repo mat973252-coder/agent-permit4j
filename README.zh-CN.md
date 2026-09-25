@@ -2,7 +2,7 @@
 
 **审批绑定具体动作，策略守住执行入口，重试复用执行结果。**
 
-[![Build](https://github.com/mat973252-coder/agent-permit4j/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/mat973252-coder/agent-permit4j/actions/workflows/build.yml)
+[![Build](https://github.com/mat973252/agent-permit4j/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/mat973252/agent-permit4j/actions/workflows/build.yml)
 [![Java 21](https://img.shields.io/badge/Java-21-blue)](pom.xml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
@@ -50,7 +50,7 @@ flowchart LR
 准备 **JDK 21** 和 Git 即可，仓库自带 Maven Wrapper。首次构建会下载依赖；演示无需 LLM Key、Node.js、外部数据库或支付账号。
 
 ```bash
-git clone https://github.com/mat973252-coder/agent-permit4j.git
+git clone https://github.com/mat973252/agent-permit4j.git
 cd agent-permit4j
 ./mvnw -B -ntp -pl agent-permit-playground -am verify
 ```
@@ -172,7 +172,7 @@ AgentPermit4j 保护经过管线的调用。应用负责身份认证、审批人
 
 Windows：`.\mvnw.cmd -B -ntp verify`。默认测试使用确定性 fake；[真实 Redis 验收](docs/integration-reference.zh-CN.md#redis-结果幂等)需显式启用。
 
-可复现的问题请提交到 [GitHub Issues](https://github.com/mat973252-coder/agent-permit4j/issues)；安全漏洞请按 [SECURITY.md](SECURITY.md) 报告。
+可复现的问题请提交到 [GitHub Issues](https://github.com/mat973252/agent-permit4j/issues)；安全漏洞请按 [SECURITY.md](SECURITY.md) 报告。
 
 ## 许可证
 
