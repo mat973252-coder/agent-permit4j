@@ -54,3 +54,30 @@ jobs:
           path: target/candidate/
           if-no-files-found: error
           retention-days: 7
+
+  status:
+    needs: [verify, adoption]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check status producer mapping tests
+        run: python3 -m unittest scripts/test_export_status.py
+      - name: Export mat-console.status/1 document
+        run: >-
+          python3 scripts/export_status.py
+          --server-url "${{ github.server_url }}"
+          --repository "${{ github.repository }}"
+          --run-id "${{ github.run_id }}"
+          --run-number "${{ github.run_number }}"
+          --sha "${{ github.sha }}"
+          --verify-result "${{ needs.verify.result || '' }}"
+          --adoption-result "${{ needs.adoption.result || '' }}"
+          --output status.json
+      - name: Retain status document
+        uses: actions/upload-artifact@v4
+        with:
+          name: mat-console-status
+          path: status.json
+          if-no-files-found: error
+          retention-days: 7
