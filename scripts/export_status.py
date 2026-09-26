@@ -62,7 +62,7 @@ def milestone_state(status: str) -> str:
         return "done"
     if status in ("failed", "cancelled"):
         return "blocked"
-    return "current"
+    return "planned"
 
 
 def health(statuses: list[str]) -> dict:
@@ -81,7 +81,8 @@ def health(statuses: list[str]) -> dict:
 def build_status(ctx: RunContext, job_results: dict[str, str | None], generated_at: datetime) -> dict:
     if generated_at.tzinfo is None:
         raise ValueError("generated_at must be timezone-aware")
-    statuses = {job: run_status(result) for job, result in job_results.items()}
+    # Only these workflow jobs are part of the producer's evidence scope.
+    statuses = {job: run_status(job_results.get(job)) for job in ("verify", "adoption")}
     verify = statuses.get("verify", "unknown")
     adoption = statuses.get("adoption", "unknown")
 
@@ -138,7 +139,7 @@ def build_status(ctx: RunContext, job_results: dict[str, str | None], generated_
         {
             "id": f"job-{job}-{status}",
             "title": f"Job `{job}` {status}",
-            "detail": f"needs.{job}.result was {job_results.get(job) or 'missing'}.",
+            "detail": f"The workflow reported {status}; skipped, missing or unrecognized results remain unknown.",
             "severity": "blocked" if status in ("failed", "cancelled") else "info",
             "evidence_url": ctx.run_url,
         }

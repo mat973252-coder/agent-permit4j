@@ -79,7 +79,13 @@ class JobResultMappingTest(unittest.TestCase):
         self.assertEqual(doc["health"]["state"], "unknown")
         self.assertTrue(all(r["status"] == "unknown" for r in doc["runs"]))
         milestone = next(m for m in doc["milestones"] if m["id"] == "isolated-consumption")
-        self.assertEqual(milestone["state"], "current")
+        self.assertEqual(milestone["state"], "planned")
+
+    def test_absent_jobs_and_extra_inputs_cannot_report_healthy_or_leak_values(self):
+        doc = status.build_status(CTX, {"other": "PRIVATE-MARKER"}, NOW)
+        self.assertEqual(doc["health"]["state"], "unknown")
+        self.assertEqual(len(doc["runs"]), 2)
+        self.assertNotIn("PRIVATE-MARKER", json.dumps(doc))
 
     def test_unrecognized_result_maps_to_unknown(self):
         doc = build(verify="success", adoption="strange-value")
